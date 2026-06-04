@@ -3,10 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "test": "dotenv -e .env.local -- vitest run",
+    "test:watch": "dotenv -e .env.local -- vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
+    "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
+    "ingest:seed:regions": "dotenv -e .env.local -- tsx scripts/ingest/seed/01-regions.ts",
+    "ingest:seed:parties": "dotenv -e .env.local -- tsx scripts/ingest/seed/02-parties.ts",
+    "ingest:seed:elections": "dotenv -e .env.local -- tsx scripts/ingest/seed/03-elections.ts",
+    "ingest:seed": "pnpm ingest:seed:regions && pnpm ingest:seed:parties && pnpm ingest:seed:elections",
+    "verify:schema": "dotenv -e .env.local -- tsx scripts/verify-schema.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
