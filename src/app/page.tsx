@@ -1,18 +1,32 @@
-import { sql } from "@/lib/db";
+import { HomeView } from "../components/HomeView";
+import { parseSearchParams } from "../lib/url-state";
+import { getTimeseries, getFilterOptions } from "../lib/queries";
+import { toRechartsData } from "../lib/series";
 
-export default async function Home() {
-  const rows = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM parties`;
-  const partyCount = rows[0]?.n ?? 0;
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function Home({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const flat: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(sp)) {
+    flat[k] = Array.isArray(v) ? v[0] : v;
+  }
+  const state = parseSearchParams(flat);
+  const [series, filterOptions] = await Promise.all([
+    getTimeseries(state),
+    getFilterOptions(),
+  ]);
+  const { data, lines } = toRechartsData(series);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">ourstory</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        진보계열 정당 역대 선거 분석 (시·도·시·군·구·읍·면·동).
-      </p>
-      <div className="rounded border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-        시드된 정당 수: <strong>{partyCount}</strong>. Phase 1.1 데이터 인제스천 이후 본격 화면.
-      </div>
-    </div>
+    <main className="max-w-5xl mx-auto px-4 py-6">
+      <h1 className="text-xl font-bold mb-1">진보계열 정당 역대 선거 시계열</h1>
+      <p className="text-sm text-zinc-500 mb-4">필터를 바꾸면 URL 이 함께 갱신됩니다 (공유 가능).</p>
+      <HomeView state={state} filterOptions={filterOptions} data={data} lines={lines} />
+    </main>
   );
 }
