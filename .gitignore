@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# seed source data (행안부 법정동코드 원본 — 재배포 부담)
+data/seed/legaldong-source.txt
