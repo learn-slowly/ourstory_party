@@ -5,7 +5,7 @@
 
 ## 프로젝트
 - ourstory: 진보계열 정당 역대 선거 분석 플랫폼 (전국 풀커버리지)
-- Next.js 15 + TypeScript + Tailwind + Supabase Postgres + Drizzle
+- Next.js 16 + TypeScript + Tailwind + Supabase Postgres + Drizzle
 - 데이터 소스: apis.data.go.kr, info.nec.go.kr
 - 배포: Vercel
 
