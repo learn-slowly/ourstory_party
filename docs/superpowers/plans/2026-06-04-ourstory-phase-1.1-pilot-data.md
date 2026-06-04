@@ -821,17 +821,17 @@ describe("extractVoteTotals (정당 단위 집계)", () => {
   });
 });
 
-describe("extractRegionTotals (분모)", () => {
-  it("ElcntItem 행 형식 그대로 보존", async () => {
-    const rows = await loadFixture("elcnt-gusigun.json");
+describe("extractRegionTotals (분모, wide row 의 sunsu/tusu/yutusu/mutusu)", () => {
+  it("wide row 에서 sdName/wiwName/totalVoters/totalVotes 도출", async () => {
+    const rows = await loadFixture("vote-xmntck-presidential.json");
     const result = extractRegionTotals(rows);
-    expect(result.length).toBe(rows.length);
+    expect(result.length).toBeGreaterThan(0);
     expect(result[0]).toMatchObject({
       sdName: expect.any(String),
       wiwName: expect.any(String),
-      totalVoters: expect.any(Number),
-      totalVotes: expect.any(Number),
     });
+    // totalVoters/totalVotes 가 모두 null 인 행이 0건이 아니어야 함
+    expect(result.some((r) => r.totalVoters != null && r.totalVotes != null)).toBe(true);
   });
 });
 
@@ -929,17 +929,27 @@ export interface RegionTotalRow {
   invalidVotes: number | null;
 }
 
+/**
+ * region_totals 분모도 VoteXmntckInfoInqireService2 응답의 wide row 에 들어있다:
+ *   sunsu(선거인수) / tusu(투표수) / yutusu(유효표) / mutusu(무효표) / gigwonsu(기권자) / crOrder
+ * 별도 ElcntInfoInqireService 호출 없이 같은 raw 에서 추출.
+ */
 export function extractRegionTotals(rawItems: unknown[]): RegionTotalRow[] {
-  const parsed = rawItems.map((r) => ElcntItemSchema.parse(r));
+  const parsed = rawItems.map((r) => XmntckItemSchema.parse(r) as Record<string, unknown>);
+  function num(v: unknown): number | null {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
   return parsed
     .filter((r) => r.sdName && r.wiwName)
     .map((r) => ({
-      sdName: r.sdName,
-      wiwName: r.wiwName!,
-      totalVoters: r.selecMan ?? null,
-      totalVotes: r.tvoteNum ?? null,
-      validVotes: r.validNum ?? null,
-      invalidVotes: r.invalidNum ?? null,
+      sdName: r.sdName as string,
+      wiwName: r.wiwName as string,
+      totalVoters: num(r.sunsu),
+      totalVotes: num(r.tusu),
+      validVotes: num(r.yutusu),
+      invalidVotes: num(r.mutusu),
     }));
 }
 
@@ -1007,14 +1017,18 @@ export interface ProcessReport {
 }
 
 /**
- * 한 election 의 raw 응답들을 정형화·매핑 후 DB upsert.
+ * 한 election 의 raw 응답을 정형화·매핑 후 DB upsert.
+ * VoteXmntckInfoInqireService2 raw 하나로 vote_totals + region_totals + candidates 모두 도출.
  * candidates 는 election 단위 replace (DELETE + INSERT).
+ *
+ * 참고: ElcntInfoInqireService 는 Phase 1.1 에서 호출하지 않음 (외국인·재외 선거인 같은
+ * 상세 통계 제공이지만 Phase 1.1 의 분모는 VoteXmntck 응답 컬럼으로 충분). Phase 1.1+ 에서
+ * 필요해지면 fetch-voters.ts 를 재호출해 별도 컬럼으로 적재.
  */
 export async function processElection(
   electionId: string,
   electionDate: string,
   votesRaw: unknown[],
-  votersRaw: unknown[],
   opts: { dryRun?: boolean } = {},
 ): Promise<ProcessReport> {
   // 1) region name → code lookup (sdName, wiwName)
@@ -1063,8 +1077,8 @@ export async function processElection(
     voteToUpsert.push({ electionId, regionCode: code, partyId, votes: v.votes });
   }
 
-  // 3) region_totals 변환
-  const regRows = extractRegionTotals(votersRaw);
+  // 3) region_totals 변환 (votesRaw 와 같은 raw 사용)
+  const regRows = extractRegionTotals(votesRaw);
   const regToUpsert: { electionId: string; regionCode: string; totalVoters: number | null; totalVotes: number | null; validVotes: number | null; invalidVotes: number | null }[] = [];
   for (const r of regRows) {
     const code = regionCodeOf(r.sdName, r.wiwName);
@@ -1538,15 +1552,12 @@ export async function runOneElection(opts: CliOpts): Promise<boolean> {
 
   const spec = { electionId: opts.electionId, sgId: election.necElectionId, sgTypecode: election.necCode };
 
-  // 1) fetch
-  const [votesRaw, votersRaw] = await Promise.all([
-    fetchResults(spec, { force: opts.refresh }),
-    fetchVoters(spec, { force: opts.refresh }),
-  ]);
+  // 1) fetch (VoteXmntckInfoInqireService2 raw 하나만 — 분모도 같은 응답에 포함)
+  const votesRaw = await fetchResults(spec, { force: opts.refresh });
 
   // 2) diff (upsert 전, election 단위) — dry-run process 로 변환 결과 얻은 뒤 DB 와 비교
   if (opts.diff && !opts.dryRun) {
-    const preview = await processElection(opts.electionId, election.date, votesRaw, votersRaw, { dryRun: true });
+    const preview = await processElection(opts.electionId, election.date, votesRaw, { dryRun: true });
     const d = await diffElection(
       opts.electionId,
       preview.voteToUpsert.map((v) => ({ regionCode: v.regionCode, partyId: v.partyId, votes: v.votes })),
@@ -1557,7 +1568,7 @@ export async function runOneElection(opts: CliOpts): Promise<boolean> {
   }
 
   // 3) process (upsert 또는 dry-run)
-  const report = await processElection(opts.electionId, election.date, votesRaw, votersRaw, { dryRun: opts.dryRun });
+  const report = await processElection(opts.electionId, election.date, votesRaw, { dryRun: opts.dryRun });
   console.log(`upsert: vote_totals ${report.voteTotalsUpserted} / region_totals ${report.regionTotalsUpserted} / candidates ${report.candidatesInserted}${opts.dryRun ? " (dry-run)" : ""}`);
 
   // 4) validate (dry-run 시는 DB 가 비어있을 수 있으므로 R1/R2 결과가 의미 다름 — 그래도 실행)
