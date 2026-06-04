@@ -17,6 +17,7 @@
     "ingest:seed:elections": "dotenv -e .env.local -- tsx scripts/ingest/seed/03-elections.ts",
     "ingest:seed:overrides": "dotenv -e .env.local -- tsx scripts/ingest/seed/04-election-party-overrides.ts",
     "ingest:seed:sejong": "dotenv -e .env.local -- tsx scripts/ingest/seed/05-sejong-region.ts",
+    "ingest:seed:historical": "dotenv -e .env.local -- tsx scripts/ingest/seed/06-historical-regions.ts",
     "ingest:seed": "pnpm ingest:seed:regions && pnpm ingest:seed:parties && pnpm ingest:seed:elections && pnpm ingest:seed:overrides",
     "ingest:election": "dotenv -e .env.local -- tsx scripts/ingest/ingest-election.ts",
     "ingest:pilot": "dotenv -e .env.local -- tsx scripts/ingest/ingest-pilot.ts",

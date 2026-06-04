@@ -53,8 +53,9 @@ async function main() {
     console.log(`  ${lv}: ${subset.length}건`);
 
     // 시·도/시·군 의 name 은 마지막 토큰 사용 ("서울특별시 종로구" → "종로구")
+    // 후행 공백으로 마지막 토큰이 빈 문자열일 경우 trim 후 재처리
     const batch = subset.map((r) => {
-      const tokens = r.name.split(/\s+/);
+      const tokens = r.name.trim().split(/\s+/);
       const displayName = tokens[tokens.length - 1];
       const parent = parentOf(r.code);
       // 부모 sido 코드가 파일에 없는 경우(예: 세종특별자치시 3600000000)는 null 처리

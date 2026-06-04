@@ -42,10 +42,18 @@ export function checkSumConsistency(
   allRegions: { code: string; level: string; parentCode: string | null }[],
 ): SumCheckResult {
   const sidoSet = new Set(allRegions.filter((r) => r.level === "sido").map((r) => r.code));
+  // sido별 직접 자녀(sigungu) 집합 — 자녀가 없는 sido(세종 등 특별자치시)는 R2 제외
+  const sidoHasChildren = new Set(
+    allRegions
+      .filter((r) => r.level === "sigungu" && r.parentCode && sidoSet.has(r.parentCode))
+      .map((r) => r.parentCode as string),
+  );
   const byKey = new Map<string, { sido?: number; childSum: number; electionId: string; sidoCode: string; partyId: string }>();
 
   for (const row of rows) {
     if (sidoSet.has(row.regionCode)) {
+      // 자녀가 없는 sido는 R2 집계에서 제외
+      if (!sidoHasChildren.has(row.regionCode)) continue;
       const key = `${row.electionId}|${row.partyId}|${row.regionCode}`;
       const cur = byKey.get(key) ?? { childSum: 0, electionId: row.electionId, sidoCode: row.regionCode, partyId: row.partyId };
       cur.sido = row.votes;

@@ -8,6 +8,12 @@ import { resolveParty } from "./lib/party-resolver";
 // 순수 변환 헬퍼 (DB 의존 없음 — 단위 테스트 대상)
 // ──────────────────────────────────────────────────────────
 
+/** null 안전 덧셈: 둘 다 null 이면 null, 하나라도 숫자면 합산 */
+function addNullable(a: number | null, b: number | null): number | null {
+  if (a == null && b == null) return null;
+  return (a ?? 0) + (b ?? 0);
+}
+
 /** wiwName === "합계" 인 집계 행이면 true */
 export function isAggregateRow(row: { wiwName?: string }): boolean {
   return row.wiwName === "합계";
@@ -214,11 +220,24 @@ export async function processElection(
 ): Promise<ProcessReport> {
   // ── 1) region name → code lookup 테이블 구축 ──────────────
   const allRegions = await db.select().from(regions);
+  // 시·도 이름 정규화: NEC 원본에서 특별자치도·특별자치시 전환 이전 이름이 사용될 수 있음
+  // 예) "강원도" → "강원특별자치도", "전라북도" → "전북특별자치도"
+  const SIDO_NAME_ALIASES: Record<string, string> = {
+    "강원도": "강원특별자치도",
+    "전라북도": "전북특별자치도",
+    "제주도": "제주특별자치도",
+  };
   const sidoByName = new Map(
     allRegions
       .filter((r) => r.level === "sido")
       .map((r) => [r.name, r]),
   );
+  // 구 이름 → 현재 이름으로 alias 등록
+  for (const [oldName, newName] of Object.entries(SIDO_NAME_ALIASES)) {
+    if (!sidoByName.has(oldName) && sidoByName.has(newName)) {
+      sidoByName.set(oldName, sidoByName.get(newName)!);
+    }
+  }
   const sigunguByKey = new Map(
     allRegions
       .filter((r) => r.level === "sigungu")
@@ -227,6 +246,20 @@ export async function processElection(
         return [`${parent?.name ?? ""}|${r.name}`, r];
       }),
   );
+  // 역사적 행정구역 변동 대응 (06-historical-regions.ts 로 DB에 추가된 코드들)
+  // sigunguByKey 는 DB 데이터로 자동 구성되므로 별도 처리 불필요.
+  // 단, DB에 역사적 코드가 없을 경우를 위한 fallback 매핑 (seed 미실행 환경)
+  const HISTORICAL_SIGUNGU_FALLBACK: Record<string, string> = {
+    // 군위군: 2023.7 대구 편입 전 경상북도 소속. DB에 4780000000 없으면 2772000000 사용
+    "경상북도|군위군": "4780000000",
+  };
+  for (const [key, code] of Object.entries(HISTORICAL_SIGUNGU_FALLBACK)) {
+    if (!sigunguByKey.has(key)) {
+      const region = allRegions.find((r) => r.code === code)
+        ?? allRegions.find((r) => r.code === "2772000000"); // 최후 fallback
+      if (region) sigunguByKey.set(key, region);
+    }
+  }
 
   function regionCodeOf(
     sdName: string,
@@ -237,22 +270,36 @@ export async function processElection(
     // 정확 매칭
     const exact = sigunguByKey.get(`${sdName}|${wiwName}`);
     if (exact) return exact.code;
-    // 부분 매칭: wiwName="창원시의창구" → sigungu.name 끝 포함
+    // 부분 매칭: wiwName="창원시의창구" / "부천시원미구" → sigungu.name 끝 포함
     const sidoCode = sidoByName.get(sdName)?.code;
     if (sidoCode) {
       for (const r of allRegions) {
         if (r.level !== "sigungu") continue;
         if (r.parentCode !== sidoCode) continue;
-        if (wiwName.endsWith(r.name)) return r.code;
+        if (r.name && wiwName.endsWith(r.name)) return r.code;
+      }
+    }
+    // 갑·을 선거구 분할 처리: "화성시갑" / "화성시을" → 갑/을 제거 후 재매칭
+    const stripped = wiwName.replace(/[갑을병정]$/, "");
+    if (stripped !== wiwName) {
+      const strippedExact = sigunguByKey.get(`${sdName}|${stripped}`);
+      if (strippedExact) return strippedExact.code;
+      if (sidoCode) {
+        for (const r of allRegions) {
+          if (r.level !== "sigungu") continue;
+          if (r.parentCode !== sidoCode) continue;
+          if (r.name && stripped.endsWith(r.name)) return r.code;
+        }
       }
     }
     return null;
   }
 
   // ── 2) vote_totals 변환 ────────────────────────────────────
+  // 갑·을 선거구 분할처럼 여러 wiwName → 같은 regionCode 로 매핑될 수 있으므로 합산 맵 사용
   const voteRows = extractVoteTotals(votesRaw);
   const unresolved = new Map<string, number>();
-  const voteToUpsert: ProcessReport["voteToUpsert"] = [];
+  const voteMap = new Map<string, { electionId: string; regionCode: string; partyId: string; votes: number }>();
 
   for (const v of voteRows) {
     const code = regionCodeOf(v.sdName, v.wiwName);
@@ -262,25 +309,42 @@ export async function processElection(
       unresolved.set(v.jdName, (unresolved.get(v.jdName) ?? 0) + v.votes);
       continue;
     }
-    voteToUpsert.push({ electionId, regionCode: code, partyId, votes: v.votes });
+    const key = `${code}|${partyId}`;
+    const cur = voteMap.get(key);
+    if (cur) {
+      cur.votes += v.votes;
+    } else {
+      voteMap.set(key, { electionId, regionCode: code, partyId, votes: v.votes });
+    }
   }
+  const voteToUpsert: ProcessReport["voteToUpsert"] = [...voteMap.values()];
 
   // ── 3) region_totals ──────────────────────────────────────
   const regRows = extractRegionTotals(votesRaw);
-  const regToUpsert: ProcessReport["regToUpsert"] = [];
+  // 갑·을 분할 등 여러 wiwName → 같은 regionCode 로 매핑될 경우 분모를 합산
+  const regMap = new Map<string, ProcessReport["regToUpsert"][number]>();
 
   for (const r of regRows) {
     const code = regionCodeOf(r.sdName, r.wiwName);
     if (!code) continue;
-    regToUpsert.push({
-      electionId,
-      regionCode: code,
-      totalVoters: r.totalVoters,
-      totalVotes: r.totalVotes,
-      validVotes: r.validVotes,
-      invalidVotes: r.invalidVotes,
-    });
+    const cur = regMap.get(code);
+    if (cur) {
+      cur.totalVoters = addNullable(cur.totalVoters, r.totalVoters);
+      cur.totalVotes = addNullable(cur.totalVotes, r.totalVotes);
+      cur.validVotes = addNullable(cur.validVotes, r.validVotes);
+      cur.invalidVotes = addNullable(cur.invalidVotes, r.invalidVotes);
+    } else {
+      regMap.set(code, {
+        electionId,
+        regionCode: code,
+        totalVoters: r.totalVoters,
+        totalVotes: r.totalVotes,
+        validVotes: r.validVotes,
+        invalidVotes: r.invalidVotes,
+      });
+    }
   }
+  const regToUpsert: ProcessReport["regToUpsert"] = [...regMap.values()];
 
   // ── 4) candidates ─────────────────────────────────────────
   const candRows = extractCandidates(votesRaw);
