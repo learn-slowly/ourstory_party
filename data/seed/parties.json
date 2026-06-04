@@ -73,6 +73,38 @@
     "aliases": ["무소속"]
   },
   {
+    "id": "democratic_new_future_2024", "name": "새로운미래", "family": "major", "color": "#00A5A4",
+    "aliases": ["새로운미래"], "activeFrom": "2024-02-09"
+  },
+  {
+    "id": "new_progressive_2024", "name": "새진보연합", "family": "progressive", "color": "#FF6B6B",
+    "aliases": ["새진보연합"], "activeFrom": "2024-03-04"
+  },
+  {
+    "id": "freedom_unification", "name": "자유통일당", "family": "other", "color": "#003478",
+    "aliases": ["자유통일당"], "activeFrom": "2020-03-09"
+  },
+  {
+    "id": "our_republican", "name": "우리공화당", "family": "other", "color": "#00A651",
+    "aliases": ["우리공화당"], "activeFrom": "2019-08-25"
+  },
+  {
+    "id": "unification_korea", "name": "통일한국당", "family": "other", "color": "#9333EA",
+    "aliases": ["통일한국당"], "activeFrom": "2020-12-03"
+  },
+  {
+    "id": "climate_welfare", "name": "기후민생당", "family": "other", "color": "#16A34A",
+    "aliases": ["기후민생당"], "activeFrom": "2024-03-04"
+  },
+  {
+    "id": "national_revolution", "name": "국가혁명당", "family": "other", "color": "#FBBF24",
+    "aliases": ["국가혁명당"], "activeFrom": "2020-02-17"
+  },
+  {
+    "id": "korean_people_party", "name": "한국국민당", "family": "other", "color": "#DC2626",
+    "aliases": ["한국국민당"], "activeFrom": "2020-01-12"
+  },
+  {
     "id": "other", "name": "기타", "family": "other", "color": "#6B7280",
     "aliases": ["기타"]
   }
