@@ -1,0 +1,79 @@
+[
+  {
+    "id": "justice", "name": "정의당", "family": "justice", "color": "#FFCC00",
+    "aliases": ["정의당", "녹색정의당"], "activeFrom": "2012-10-22"
+  },
+  {
+    "id": "labor", "name": "노동당", "family": "labor", "color": "#A50034",
+    "aliases": ["노동당", "진보신당", "진보신당연대회의"], "activeFrom": "2008-03-16"
+  },
+  {
+    "id": "green", "name": "녹색당", "family": "green", "color": "#1B7339",
+    "aliases": ["녹색당"], "activeFrom": "2012-03-04"
+  },
+  {
+    "id": "progressive", "name": "진보당", "family": "progressive", "color": "#D6001C",
+    "aliases": ["진보당", "민중당"], "activeFrom": "2020-06-01"
+  },
+  {
+    "id": "minlabour", "name": "민주노동당", "family": "historical_progressive", "color": "#E6004C",
+    "aliases": ["민주노동당"], "activeFrom": "2000-01-30", "activeUntil": "2011-12-05"
+  },
+  {
+    "id": "unified_progressive", "name": "통합진보당", "family": "historical_progressive", "color": "#D6001C",
+    "aliases": ["통합진보당"], "activeFrom": "2011-12-06", "activeUntil": "2014-12-19"
+  },
+  {
+    "id": "people_united", "name": "민중연합당", "family": "historical_progressive", "color": "#D6001C",
+    "aliases": ["민중연합당"], "activeFrom": "2016-02-27", "activeUntil": "2017-10-15"
+  },
+  {
+    "id": "democratic", "name": "더불어민주당", "family": "major", "color": "#152484",
+    "aliases": ["더불어민주당", "새정치민주연합", "민주당", "통합민주당", "열린우리당", "민주통합당"],
+    "activeFrom": "2014-03-26"
+  },
+  {
+    "id": "democratic_alliance_2024", "name": "더불어민주연합", "family": "major", "color": "#152484",
+    "aliases": ["더불어민주연합", "더불어시민당"], "satelliteOf": "democratic",
+    "activeFrom": "2024-03-03"
+  },
+  {
+    "id": "open_democratic", "name": "열린민주당", "family": "major", "color": "#3A86C2",
+    "aliases": ["열린민주당"], "satelliteOf": "democratic",
+    "activeFrom": "2020-03-08", "activeUntil": "2022-01-18"
+  },
+  {
+    "id": "people_power", "name": "국민의힘", "family": "major", "color": "#E61E2B",
+    "aliases": ["국민의힘", "미래통합당", "자유한국당", "새누리당", "한나라당"],
+    "activeFrom": "2020-09-02"
+  },
+  {
+    "id": "future_korea", "name": "미래한국당", "family": "major", "color": "#D62D3A",
+    "aliases": ["미래한국당"], "satelliteOf": "people_power",
+    "activeFrom": "2020-02-05", "activeUntil": "2020-05-29"
+  },
+  {
+    "id": "people_future_2024", "name": "국민의미래", "family": "major", "color": "#D62D3A",
+    "aliases": ["국민의미래"], "satelliteOf": "people_power", "activeFrom": "2024-02-13"
+  },
+  {
+    "id": "rebuilding_korea_2024", "name": "조국혁신당", "family": "other", "color": "#06275E",
+    "aliases": ["조국혁신당"], "activeFrom": "2024-03-03"
+  },
+  {
+    "id": "reform", "name": "개혁신당", "family": "other", "color": "#FF7920",
+    "aliases": ["개혁신당"], "activeFrom": "2024-01-20"
+  },
+  {
+    "id": "basic_income", "name": "기본소득당", "family": "other", "color": "#00D2C3",
+    "aliases": ["기본소득당"], "activeFrom": "2020-01-19"
+  },
+  {
+    "id": "independent", "name": "무소속", "family": "other", "color": "#9CA3AF",
+    "aliases": ["무소속"]
+  },
+  {
+    "id": "other", "name": "기타", "family": "other", "color": "#6B7280",
+    "aliases": ["기타"]
+  }
+]
