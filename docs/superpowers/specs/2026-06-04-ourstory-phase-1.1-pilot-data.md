@@ -70,10 +70,9 @@ ourstory/
 │       ├── lib/
 │       │   ├── api-client.ts                  # 신규
 │       │   └── party-resolver.ts              # 신규
-│       ├── fetch-results.ts                   # 신규
+│       ├── fetch-results.ts                   # 신규 (raw 응답에 후보자명 hbojaName 포함 → candidates 도 여기서)
 │       ├── fetch-voters.ts                    # 신규
-│       ├── fetch-candidates.ts                # 신규
-│       ├── process.ts                         # 신규
+│       ├── process.ts                         # 신규 (results raw 1개에서 vote_totals + candidates 둘 다 파생)
 │       ├── validate.ts                        # 신규
 │       ├── diff.ts                            # 신규
 │       └── seed/
