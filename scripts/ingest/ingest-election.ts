@@ -3,7 +3,7 @@ import { sql, db } from "../../src/lib/db-admin";
 import { elections } from "../../db/schema";
 import { fetchResults } from "./fetch-results";
 import { processElection } from "./process";
-import { validateElection, formatReport } from "./validate";
+import { validateElection, formatReport, type InMemoryData } from "./validate";
 import { diffElection, formatDiff } from "./diff";
 
 interface CliOpts {
@@ -60,7 +60,11 @@ export async function runOneElection(opts: CliOpts): Promise<boolean> {
   console.log(`upsert: vote_totals ${report.voteTotalsUpserted} / region_totals ${report.regionTotalsUpserted} / candidates ${report.candidatesInserted}${opts.dryRun ? " (dry-run)" : ""}`);
 
   // 4) validate
-  const val = await validateElection(opts.electionId, report.unresolvedRawNames);
+  // dry-run 시에는 DB 쓰기가 없으므로 in-memory 변환 결과로 R1/R2 검증
+  const inMemory: InMemoryData | undefined = opts.dryRun
+    ? { votes: report.voteToUpsert, regs: report.regToUpsert }
+    : undefined;
+  const val = await validateElection(opts.electionId, report.unresolvedRawNames, inMemory);
   console.log(formatReport(val));
 
   return !val.fatal;
@@ -73,4 +77,8 @@ async function main() {
   process.exit(ok ? 0 : 1);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+// 직접 실행 시에만 main() 호출 (import 시에는 실행하지 않음)
+const isMain = process.argv[1]?.includes("ingest-election");
+if (isMain) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}

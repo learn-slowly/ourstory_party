@@ -126,21 +126,56 @@ export function checkDenominatorConsistency(
   return { warnings };
 }
 
+export interface InMemoryData {
+  votes: { electionId: string; regionCode: string; partyId: string; votes: number }[];
+  regs: {
+    electionId: string; regionCode: string;
+    totalVoters: number | null; totalVotes: number | null;
+    validVotes: number | null; invalidVotes: number | null;
+  }[];
+}
+
 export async function validateElection(
   electionId: string,
   unresolvedRawNames: { rawName: string; votes: number }[],
+  inMemory?: InMemoryData,
 ): Promise<ValidationReport> {
   const allRegions = await db.select().from(regions);
   const sidoCodes = allRegions.filter((r) => r.level === "sido").map((r) => r.code);
 
-  const votes = await db.select().from(voteTotals).where(eq(voteTotals.electionId, electionId));
-  const regs = await db.select().from(regionTotals).where(eq(regionTotals.electionId, electionId));
+  // dry-run 시에는 in-memory 데이터로 검증, 실제 실행 시에는 DB에서 읽음
+  const votes = inMemory
+    ? inMemory.votes
+    : (await db.select().from(voteTotals).where(eq(voteTotals.electionId, electionId))).map((v) => ({
+        electionId: v.electionId, regionCode: v.regionCode, partyId: v.partyId, votes: v.votes,
+      }));
+  const regs = inMemory
+    ? inMemory.regs
+    : (await db.select().from(regionTotals).where(eq(regionTotals.electionId, electionId))).map((r) => ({
+        electionId: r.electionId, regionCode: r.regionCode,
+        totalVoters: r.totalVoters, totalVotes: r.totalVotes,
+        validVotes: r.validVotes, invalidVotes: r.invalidVotes,
+      }));
 
   const presentSido = new Set(
     votes.filter((v) => sidoCodes.includes(v.regionCode)).map((v) => v.regionCode),
   );
+
+  // 기초단체장(mayor)·기초의원(council-basic*) 선거에서는
+  // 세종특별자치시(5000000000)와 제주특별자치도(5000000000 아님, 별도 코드) 누락이 정상.
+  // 세종: 특별자치시로 기초자치단체 없음, 제주: 단층제 특별자치도로 기초자치단체 없음.
+  const BASIC_EXEMPT_REGION_NAMES = new Set(["세종특별자치시", "제주특별자치도"]);
+  const isBasicElection = /mayor|council-basic/.test(electionId);
+  const exemptCodes = isBasicElection
+    ? new Set(
+        allRegions
+          .filter((r) => r.level === "sido" && BASIC_EXEMPT_REGION_NAMES.has(r.name))
+          .map((r) => r.code),
+      )
+    : new Set<string>();
+
   const missingRegions = sidoCodes
-    .filter((c) => !presentSido.has(c))
+    .filter((c) => !presentSido.has(c) && !exemptCodes.has(c))
     .map((c) => ({ electionId, regionCode: c }));
 
   const r2 = checkSumConsistency(

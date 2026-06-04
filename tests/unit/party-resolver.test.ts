@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { sql, db } from "../../src/lib/db-admin";
 import { electionPartyOverrides, partyAliases, parties, elections } from "../../db/schema";
-import { resolveParty } from "../../scripts/ingest/lib/party-resolver";
+import { resolveParty, clearPartyResolverCache } from "../../scripts/ingest/lib/party-resolver";
 import { eq } from "drizzle-orm";
 
 const TEST_ELECTION = "test-1.1-election";
@@ -9,6 +9,8 @@ const TEST_OVERRIDE_RAW = "테스트당";
 const TEST_ALIAS_RAW = "테스트별칭";
 
 beforeEach(async () => {
+  // 캐시 초기화: 테스트 간 캐시 오염 방지
+  clearPartyResolverCache();
   await db.delete(electionPartyOverrides).where(eq(electionPartyOverrides.electionId, TEST_ELECTION));
   await db.delete(partyAliases).where(eq(partyAliases.alias, TEST_ALIAS_RAW));
   await db.delete(partyAliases).where(eq(partyAliases.alias, TEST_OVERRIDE_RAW));
