@@ -1,4 +1,27 @@
 [
+  { "id": "2014-local-governor", "date": "2014-06-04", "type": "governor",
+    "name": "제6회 지방선거 — 시·도지사", "necElectionId": "0020140604", "necCode": "3", "displayOrder": -19 },
+  { "id": "2014-local-mayor", "date": "2014-06-04", "type": "mayor",
+    "name": "제6회 지방선거 — 시장·군수·구청장", "necElectionId": "0020140604", "necCode": "4", "displayOrder": -18 },
+  { "id": "2014-local-council", "date": "2014-06-04", "type": "local_council",
+    "name": "제6회 지방선거 — 시·도의원 지역구", "necElectionId": "0020140604", "necCode": "5", "displayOrder": -17 },
+  { "id": "2014-local-council-prop", "date": "2014-06-04", "type": "local_council_prop",
+    "name": "제6회 지방선거 — 시·도의원 비례", "necElectionId": "0020140604", "necCode": "8", "displayOrder": -16 },
+  { "id": "2014-local-council-basic", "date": "2014-06-04", "type": "local_council_basic",
+    "name": "제6회 지방선거 — 구·시·군의원 지역구", "necElectionId": "0020140604", "necCode": "6", "displayOrder": -15 },
+  { "id": "2014-local-council-basic-prop", "date": "2014-06-04", "type": "local_council_basic_prop",
+    "name": "제6회 지방선거 — 구·시·군의원 비례", "necElectionId": "0020140604", "necCode": "9", "displayOrder": -14 },
+  { "id": "2014-local-superintendent", "date": "2014-06-04", "type": "superintendent",
+    "name": "제6회 지방선거 — 교육감", "necElectionId": "0020140604", "necCode": "11", "displayOrder": -13 },
+
+  { "id": "2016-general", "date": "2016-04-13", "type": "general",
+    "name": "제20대 국회의원선거 — 지역구", "necElectionId": "0020160413", "necCode": "2", "displayOrder": -12 },
+  { "id": "2016-general-prop", "date": "2016-04-13", "type": "general_prop",
+    "name": "제20대 국회의원선거 — 비례대표", "necElectionId": "0020160413", "necCode": "7", "displayOrder": -11 },
+
+  { "id": "2017-presidential", "date": "2017-05-09", "type": "presidential",
+    "name": "제19대 대통령선거", "necElectionId": "0020170509", "necCode": "1", "displayOrder": -10 },
+
   { "id": "2018-local-governor", "date": "2018-06-13", "type": "governor",
     "name": "제7회 지방선거 — 시·도지사", "necElectionId": "0020180613", "necCode": "3", "displayOrder": 1 },
   { "id": "2018-local-mayor", "date": "2018-06-13", "type": "mayor",
