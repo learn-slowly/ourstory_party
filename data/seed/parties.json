@@ -29,7 +29,7 @@
   },
   {
     "id": "democratic", "name": "더불어민주당", "family": "major", "color": "#152484",
-    "aliases": ["더불어민주당", "새정치민주연합", "민주당", "통합민주당", "열린우리당", "민주통합당"],
+    "aliases": ["더불어민주당", "새정치민주연합", "민주당", "통합민주당", "열린우리당", "민주통합당", "새천년민주당", "대통합민주신당", "민주통합신당"],
     "activeFrom": "2014-03-26"
   },
   {
@@ -44,8 +44,17 @@
   },
   {
     "id": "people_power", "name": "국민의힘", "family": "major", "color": "#E61E2B",
-    "aliases": ["국민의힘", "미래통합당", "자유한국당", "새누리당", "한나라당"],
+    "aliases": ["국민의힘", "미래통합당", "자유한국당", "새누리당", "한나라당", "친박연대", "자유선진당"],
     "activeFrom": "2020-09-02"
+  },
+  {
+    "id": "jamintj", "name": "자유민주연합", "family": "other", "color": "#1E40AF",
+    "aliases": ["자유민주연합", "자민련"], "activeFrom": "1995-03-30", "activeUntil": "2006-04-07"
+  },
+  {
+    "id": "people_party_2016", "name": "국민의당", "family": "other", "color": "#00B14C",
+    "aliases": ["국민의당", "새정치국민의당", "바른미래당", "민주평화당"],
+    "activeFrom": "2016-02-02", "activeUntil": "2018-02-13"
   },
   {
     "id": "future_korea", "name": "미래한국당", "family": "major", "color": "#D62D3A",
