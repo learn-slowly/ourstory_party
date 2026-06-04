@@ -1,0 +1,200 @@
+import { eq } from "drizzle-orm";
+import { db } from "../../src/lib/db-admin";
+import { regions, voteTotals, regionTotals } from "../../db/schema";
+
+export interface SumDelta {
+  electionId: string;
+  sidoCode: string;
+  partyId: string;
+  sidoVotes: number;
+  sigunguSum: number;
+  deltaPct: number;
+}
+
+export interface SumCheckResult { violations: SumDelta[]; }
+
+export interface DenomWarning {
+  electionId: string;
+  regionCode: string;
+  issue: "sum_mismatch" | "progress_out_of_range";
+  detail: string;
+}
+
+export interface DenomCheckResult { warnings: DenomWarning[]; }
+
+export interface StructureCheckResult {
+  missingRegions: { electionId: string; regionCode: string }[];
+}
+
+export interface ValidationReport {
+  electionId: string;
+  r1Structure: StructureCheckResult;
+  r2Sum: SumCheckResult;
+  r3UnresolvedRawNames: { rawName: string; votes: number }[];
+  r4Denominator: DenomCheckResult;
+  fatal: boolean;
+}
+
+const TOLERANCE_PCT = 0.5;
+
+export function checkSumConsistency(
+  rows: { electionId: string; regionCode: string; partyId: string; votes: number }[],
+  allRegions: { code: string; level: string; parentCode: string | null }[],
+): SumCheckResult {
+  const sidoSet = new Set(allRegions.filter((r) => r.level === "sido").map((r) => r.code));
+  const byKey = new Map<string, { sido?: number; childSum: number; electionId: string; sidoCode: string; partyId: string }>();
+
+  for (const row of rows) {
+    if (sidoSet.has(row.regionCode)) {
+      const key = `${row.electionId}|${row.partyId}|${row.regionCode}`;
+      const cur = byKey.get(key) ?? { childSum: 0, electionId: row.electionId, sidoCode: row.regionCode, partyId: row.partyId };
+      cur.sido = row.votes;
+      byKey.set(key, cur);
+    } else {
+      const parent = allRegions.find((r) => r.code === row.regionCode)?.parentCode;
+      if (!parent) continue;
+      const key = `${row.electionId}|${row.partyId}|${parent}`;
+      const cur = byKey.get(key) ?? { childSum: 0, electionId: row.electionId, sidoCode: parent, partyId: row.partyId };
+      cur.childSum += row.votes;
+      byKey.set(key, cur);
+    }
+  }
+
+  const violations: SumDelta[] = [];
+  for (const v of byKey.values()) {
+    if (v.sido == null) continue;
+    if (v.sido === 0 && v.childSum === 0) continue;
+    const denom = Math.max(Math.abs(v.sido), 1);
+    const deltaPct = Math.abs(v.sido - v.childSum) / denom * 100;
+    if (deltaPct > TOLERANCE_PCT) {
+      violations.push({
+        electionId: v.electionId,
+        sidoCode: v.sidoCode,
+        partyId: v.partyId,
+        sidoVotes: v.sido,
+        sigunguSum: v.childSum,
+        deltaPct,
+      });
+    }
+  }
+  return { violations };
+}
+
+export function checkDenominatorConsistency(
+  rows: {
+    electionId: string;
+    regionCode: string;
+    totalVoters: number | null;
+    totalVotes: number | null;
+    validVotes: number | null;
+    invalidVotes: number | null;
+  }[],
+): DenomCheckResult {
+  const warnings: DenomWarning[] = [];
+
+  for (const r of rows) {
+    if (r.totalVotes != null && r.validVotes != null && r.invalidVotes != null) {
+      if (r.validVotes + r.invalidVotes !== r.totalVotes) {
+        warnings.push({
+          electionId: r.electionId,
+          regionCode: r.regionCode,
+          issue: "sum_mismatch",
+          detail: `valid(${r.validVotes}) + invalid(${r.invalidVotes}) != total(${r.totalVotes})`,
+        });
+      }
+    }
+    if (r.totalVoters != null && r.totalVoters > 0 && r.totalVotes != null) {
+      const pct = r.totalVotes / r.totalVoters * 100;
+      if (pct < 0 || pct > 100) {
+        warnings.push({
+          electionId: r.electionId,
+          regionCode: r.regionCode,
+          issue: "progress_out_of_range",
+          detail: `${pct.toFixed(2)}%`,
+        });
+      }
+    }
+  }
+  return { warnings };
+}
+
+export async function validateElection(
+  electionId: string,
+  unresolvedRawNames: { rawName: string; votes: number }[],
+): Promise<ValidationReport> {
+  const allRegions = await db.select().from(regions);
+  const sidoCodes = allRegions.filter((r) => r.level === "sido").map((r) => r.code);
+
+  const votes = await db.select().from(voteTotals).where(eq(voteTotals.electionId, electionId));
+  const regs = await db.select().from(regionTotals).where(eq(regionTotals.electionId, electionId));
+
+  const presentSido = new Set(
+    votes.filter((v) => sidoCodes.includes(v.regionCode)).map((v) => v.regionCode),
+  );
+  const missingRegions = sidoCodes
+    .filter((c) => !presentSido.has(c))
+    .map((c) => ({ electionId, regionCode: c }));
+
+  const r2 = checkSumConsistency(
+    votes.map((v) => ({
+      electionId: v.electionId,
+      regionCode: v.regionCode,
+      partyId: v.partyId,
+      votes: v.votes,
+    })),
+    allRegions.map((r) => ({ code: r.code, level: r.level, parentCode: r.parentCode })),
+  );
+
+  const r4 = checkDenominatorConsistency(
+    regs.map((r) => ({
+      electionId: r.electionId,
+      regionCode: r.regionCode,
+      totalVoters: r.totalVoters,
+      totalVotes: r.totalVotes,
+      validVotes: r.validVotes,
+      invalidVotes: r.invalidVotes,
+    })),
+  );
+
+  const fatal = missingRegions.length > 0 || r2.violations.length > 0;
+
+  return {
+    electionId,
+    r1Structure: { missingRegions },
+    r2Sum: r2,
+    r3UnresolvedRawNames: unresolvedRawNames,
+    r4Denominator: r4,
+    fatal,
+  };
+}
+
+export function formatReport(rep: ValidationReport): string {
+  const lines: string[] = [];
+  lines.push(`=== Ingest Report: ${rep.electionId} ===`);
+  lines.push(
+    `R1 구조:        ${rep.r1Structure.missingRegions.length === 0 ? "PASS" : `FAIL — 누락 시·도 ${rep.r1Structure.missingRegions.length}개`}`,
+  );
+  if (rep.r2Sum.violations.length === 0) {
+    lines.push(`R2 합계:        PASS`);
+  } else {
+    const maxDelta = Math.max(...rep.r2Sum.violations.map((v) => v.deltaPct));
+    lines.push(`R2 합계:        FAIL — 위반 ${rep.r2Sum.violations.length}건 (max delta ${maxDelta.toFixed(2)}%)`);
+  }
+  if (rep.r3UnresolvedRawNames.length === 0) {
+    lines.push(`R3 alias:       PASS`);
+  } else {
+    lines.push(`R3 alias:       WARN — 미매칭 raw 정당명 ${rep.r3UnresolvedRawNames.length}건:`);
+    for (const u of rep.r3UnresolvedRawNames.slice(0, 10)) {
+      lines.push(`                  "${u.rawName}" (votes 합계 ${u.votes.toLocaleString()})`);
+    }
+  }
+  if (rep.r4Denominator.warnings.length === 0) {
+    lines.push(`R4 분모:        PASS`);
+  } else {
+    lines.push(`R4 분모:        WARN — ${rep.r4Denominator.warnings.length}건`);
+    for (const w of rep.r4Denominator.warnings.slice(0, 5)) {
+      lines.push(`                  ${w.regionCode} ${w.issue}: ${w.detail}`);
+    }
+  }
+  return lines.join("\n");
+}
