@@ -251,19 +251,16 @@ export const ApiResponseSchema = z.object({
   }),
 });
 
-// VoteXmntckInfoInqireService2 / getXmntckSttusInfoInqire 응답 행
-// sgId, sgTypecode, sdName, sggName, wiwName, hbojaName(후보자명), jdName(정당명), vtTcnt(득표수), vtRate(득표율)
+// VoteXmntckInfoInqireService2 / getXmntckSttusInfoInqire 응답 행 (wide format).
+// 한 행에 메타 + 후보자/정당이 jd01~jd50 / hbj01~hbj50 / dugsu01~dugsu50 으로 펼쳐진다.
+// 컬럼 수는 선거 유형마다 다르므로 catchall 로 동적 허용한다.
 export const XmntckItemSchema = z.object({
   sgId: z.string(),
   sgTypecode: z.string(),
   sdName: z.string(),
   sggName: z.string().optional(),
   wiwName: z.string().optional(),
-  hbojaName: z.string().optional(),
-  jdName: z.string().optional(),
-  vtTcnt: z.coerce.number().optional(),
-  vtRate: z.coerce.number().optional(),
-});
+}).catchall(z.unknown());
 export type XmntckItem = z.infer<typeof XmntckItemSchema>;
 
 // ElcntInfoInqireService / getGsigElcntInfoInqire 응답 행 (시·군 분모)
@@ -878,21 +875,47 @@ export interface VoteTotalRow {
 }
 
 /**
- * raw 행을 (sdName, wiwName, jdName) 키로 합산.
- * 같은 키에 여러 후보자 행이 있을 수 있어 votes 합산 필요(같은 정당 동시 출마 등).
+ * data.go.kr 응답은 wide format — 한 행에 jd01~jd50/hbj01~hbj50/dugsu01~dugsu50 가 펼쳐져 있다.
+ * 한 행을 후보자 단위 셀로 expand.
+ */
+interface CandidateCell {
+  jd: string;                       // 정당명 (예: "더불어민주당")
+  hbj: string | undefined;          // 후보자명 (없으면 undefined)
+  dugsu: number;                    // 득표수
+}
+
+export function expandCells(row: Record<string, unknown>): CandidateCell[] {
+  const cells: CandidateCell[] = [];
+  for (let i = 1; i <= 50; i++) {
+    const pad = String(i).padStart(2, "0");
+    const jdRaw = row[`jd${pad}`];
+    if (jdRaw == null || jdRaw === "") continue;
+    const jd = typeof jdRaw === "string" ? jdRaw : String(jdRaw);
+    const hbjRaw = row[`hbj${pad}`];
+    const hbj = typeof hbjRaw === "string" && hbjRaw !== "" ? hbjRaw : undefined;
+    const dugsuRaw = row[`dugsu${pad}`];
+    const dugsu = dugsuRaw == null || dugsuRaw === "" ? 0 : Number(dugsuRaw);
+    cells.push({ jd, hbj, dugsu });
+  }
+  return cells;
+}
+
+/**
+ * wide row → (sdName, wiwName, jdName) long 행으로 펼치고 합산.
  */
 export function extractVoteTotals(rawItems: unknown[]): VoteTotalRow[] {
-  const parsed = rawItems.map((r) => XmntckItemSchema.parse(r));
+  const parsed = rawItems.map((r) => XmntckItemSchema.parse(r) as Record<string, unknown>);
   const map = new Map<string, VoteTotalRow>();
   for (const r of parsed) {
-    if (!r.jdName || r.vtTcnt == null) continue;
-    const sd = r.sdName;
-    const wi = r.wiwName ?? "";
+    const sd = (r.sdName as string) ?? "";
+    const wi = (r.wiwName as string) ?? "";
     if (!sd || !wi) continue;
-    const key = `${sd}|${wi}|${r.jdName}`;
-    const cur = map.get(key);
-    if (cur) cur.votes += r.vtTcnt;
-    else map.set(key, { sdName: sd, wiwName: wi, jdName: r.jdName, votes: r.vtTcnt });
+    for (const cell of expandCells(r)) {
+      const key = `${sd}|${wi}|${cell.jd}`;
+      const cur = map.get(key);
+      if (cur) cur.votes += cell.dugsu;
+      else map.set(key, { sdName: sd, wiwName: wi, jdName: cell.jd, votes: cell.dugsu });
+    }
   }
   return [...map.values()];
 }
@@ -929,24 +952,29 @@ export interface CandidateRow {
 
 /**
  * 후보자 단위: (constituency, name, jdName) 키로 행 집계 (election 전체 합).
+ * wide row 를 expand 한 뒤 후보자명(hbj) 가 있는 셀만 candidates 로 적재.
  * constituency 는 선거 유형에 따라:
  *  - 대선: sgggName 의 "대한민국" 그대로 사용 (단일 선거구)
  *  - 도지사: sgggName 의 "○○시·도" 사용
  *  - 시장군수: sgggName=시·군 그대로
  *  - 지역구 의원: sgggName=선거구명
+ * 합계 행(wiwName="합계")은 중복 합산 방지를 위해 제외.
  */
 export function extractCandidates(rawItems: unknown[]): CandidateRow[] {
-  const parsed = rawItems.map((r) => XmntckItemSchema.parse(r));
+  const parsed = rawItems.map((r) => XmntckItemSchema.parse(r) as Record<string, unknown>);
   const map = new Map<string, CandidateRow>();
   for (const r of parsed) {
-    if (!r.hbojaName || r.vtTcnt == null) continue;
-    const constituency = r.sggName ?? r.sdName;
-    if (!constituency || isAggregateRow(r)) continue;  // 합계 행 제외 (중복 합산 방지)
-    const partyRaw = r.jdName ?? "";
-    const key = `${constituency}|${r.hbojaName}|${partyRaw}`;
-    const cur = map.get(key);
-    if (cur) cur.votes += r.vtTcnt;
-    else map.set(key, { constituency, name: r.hbojaName, partyNameRaw: partyRaw, votes: r.vtTcnt });
+    const wi = (r.wiwName as string) ?? "";
+    if (wi === "합계") continue;
+    const constituency = (r.sggName as string) ?? (r.sdName as string) ?? "";
+    if (!constituency) continue;
+    for (const cell of expandCells(r)) {
+      if (!cell.hbj) continue;
+      const key = `${constituency}|${cell.hbj}|${cell.jd}`;
+      const cur = map.get(key);
+      if (cur) cur.votes += cell.dugsu;
+      else map.set(key, { constituency, name: cell.hbj, partyNameRaw: cell.jd, votes: cell.dugsu });
+    }
   }
   return [...map.values()];
 }
@@ -1003,7 +1031,20 @@ export async function processElection(
 
   function regionCodeOf(sdName: string, wiwName: string): string | null {
     if (wiwName === "합계") return sidoByName.get(sdName)?.code ?? null;
-    return sigunguByKey.get(`${sdName}|${wiwName}`)?.code ?? null;
+    // (1) 정확 매칭
+    const exact = sigunguByKey.get(`${sdName}|${wiwName}`);
+    if (exact) return exact.code;
+    // (2) wiwName 끝 토큰 매칭 — data.go.kr 응답은 "창원시의창구"처럼 시·군명+일반구명을 붙여 쓴 형식이 많음.
+    //     해당 시·도 안의 sigungu 중 name 으로 endsWith 매칭.
+    const sidoCode = sidoByName.get(sdName)?.code;
+    if (sidoCode) {
+      for (const r of allRegions) {
+        if (r.level !== "sigungu") continue;
+        if (r.parentCode !== sidoCode) continue;
+        if (wiwName.endsWith(r.name)) return r.code;
+      }
+    }
+    return null;
   }
 
   // 2) vote_totals 변환
