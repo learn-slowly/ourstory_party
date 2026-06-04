@@ -103,3 +103,15 @@ export const candidates = pgTable(
     electionConstIdx: index("cand_election_const_idx").on(t.electionId, t.constituency),
   }),
 );
+
+// 선거 단위 정당 매핑 강제 (정치 판단 케이스)
+export const electionPartyOverrides = pgTable(
+  "election_party_overrides",
+  {
+    electionId: text("election_id").notNull().references(() => elections.id),
+    rawName: text("raw_name").notNull(),
+    partyId: text("party_id").notNull().references(() => parties.id),
+    note: text("note"),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.electionId, t.rawName] }) }),
+);

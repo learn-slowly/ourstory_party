@@ -1,8 +1,8 @@
 import postgres from "postgres";
 
 const expected = [
-  "regions", "elections", "parties", "party_aliases",
-  "vote_totals", "region_totals", "candidates",
+  "candidates", "election_party_overrides", "elections", "parties",
+  "party_aliases", "region_totals", "regions", "vote_totals",
 ];
 
 async function main() {
@@ -23,7 +23,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`✓ 7개 테이블 모두 존재: ${found.join(", ")}`);
+    console.log(`✓ 8개 테이블 모두 존재: ${found.join(", ")}`);
   } finally {
     await sql.end();
   }
