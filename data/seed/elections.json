@@ -1,4 +1,41 @@
 [
+  { "id": "2002-local-governor", "date": "2002-06-13", "type": "governor",
+    "name": "제3회 지방선거 — 시·도지사", "necElectionId": "0020020613", "necCode": "3", "displayOrder": -50 },
+  { "id": "2002-local-council-prop", "date": "2002-06-13", "type": "local_council_prop",
+    "name": "제3회 지방선거 — 시·도의원 비례", "necElectionId": "0020020613", "necCode": "8", "displayOrder": -49 },
+  { "id": "2002-presidential", "date": "2002-12-19", "type": "presidential",
+    "name": "제16대 대통령선거", "necElectionId": "0020021219", "necCode": "1", "displayOrder": -48 },
+
+  { "id": "2004-general", "date": "2004-04-15", "type": "general",
+    "name": "제17대 국회의원선거 — 지역구", "necElectionId": "0020040415", "necCode": "2", "displayOrder": -47 },
+  { "id": "2004-general-prop", "date": "2004-04-15", "type": "general_prop",
+    "name": "제17대 국회의원선거 — 비례대표", "necElectionId": "0020040415", "necCode": "7", "displayOrder": -46 },
+
+  { "id": "2006-local-governor", "date": "2006-05-31", "type": "governor",
+    "name": "제4회 지방선거 — 시·도지사", "necElectionId": "0020060531", "necCode": "3", "displayOrder": -45 },
+  { "id": "2006-local-council-prop", "date": "2006-05-31", "type": "local_council_prop",
+    "name": "제4회 지방선거 — 시·도의원 비례", "necElectionId": "0020060531", "necCode": "8", "displayOrder": -44 },
+
+  { "id": "2007-presidential", "date": "2007-12-19", "type": "presidential",
+    "name": "제17대 대통령선거", "necElectionId": "0020071219", "necCode": "1", "displayOrder": -43 },
+
+  { "id": "2008-general", "date": "2008-04-09", "type": "general",
+    "name": "제18대 국회의원선거 — 지역구", "necElectionId": "0020080409", "necCode": "2", "displayOrder": -42 },
+  { "id": "2008-general-prop", "date": "2008-04-09", "type": "general_prop",
+    "name": "제18대 국회의원선거 — 비례대표", "necElectionId": "0020080409", "necCode": "7", "displayOrder": -41 },
+
+  { "id": "2010-local-governor", "date": "2010-06-02", "type": "governor",
+    "name": "제5회 지방선거 — 시·도지사", "necElectionId": "0020100602", "necCode": "3", "displayOrder": -40 },
+  { "id": "2010-local-council-prop", "date": "2010-06-02", "type": "local_council_prop",
+    "name": "제5회 지방선거 — 시·도의원 비례", "necElectionId": "0020100602", "necCode": "8", "displayOrder": -39 },
+
+  { "id": "2012-general", "date": "2012-04-11", "type": "general",
+    "name": "제19대 국회의원선거 — 지역구", "necElectionId": "0020120411", "necCode": "2", "displayOrder": -38 },
+  { "id": "2012-general-prop", "date": "2012-04-11", "type": "general_prop",
+    "name": "제19대 국회의원선거 — 비례대표", "necElectionId": "0020120411", "necCode": "7", "displayOrder": -37 },
+  { "id": "2012-presidential", "date": "2012-12-19", "type": "presidential",
+    "name": "제18대 대통령선거", "necElectionId": "0020121219", "necCode": "1", "displayOrder": -36 },
+
   { "id": "2014-local-governor", "date": "2014-06-04", "type": "governor",
     "name": "제6회 지방선거 — 시·도지사", "necElectionId": "0020140604", "necCode": "3", "displayOrder": -19 },
   { "id": "2014-local-mayor", "date": "2014-06-04", "type": "mayor",
