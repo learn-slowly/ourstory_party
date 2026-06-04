@@ -42,3 +42,6 @@ next-env.d.ts
 
 # seed source data (행안부 법정동코드 원본 — 재배포 부담)
 data/seed/legaldong-source.txt
+
+# data.go.kr raw 캐시 (재실행 시 재생성)
+/data/raw/
