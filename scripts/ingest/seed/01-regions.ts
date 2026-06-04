@@ -14,11 +14,12 @@ async function main() {
   const text = iconv.decode(buf, "euc-kr");
   const lines = text.split(/\r?\n/).filter(Boolean);
 
-  // 법정동코드 10자리. 시·도=마지막 8자리 0, 시·군·구=마지막 5자리 0, 읍·면·동=나머지
-  function levelOf(code: string): "sido" | "sigungu" | "emd" {
+  // 법정동코드 10자리. 시·도=마지막 8자리 0, 시·군·구=마지막 5자리 0, 읍·면·동=마지막 2자리 0, 리=끝 2자리 비0
+  function levelOf(code: string): "sido" | "sigungu" | "emd" | "ri" {
     if (code.endsWith("00000000")) return "sido";
     if (code.endsWith("00000")) return "sigungu";
-    return "emd";
+    if (code.endsWith("00")) return "emd";
+    return "ri";
   }
 
   function parentOf(code: string): string | null {
@@ -35,8 +36,9 @@ async function main() {
       const [code, name, status] = line.split("\t");
       return { code, name, status };
     })
-    // 헤더 행과 폐지 행 제거
-    .filter((r) => r.code && /^\d{10}$/.test(r.code) && r.status === "존재");
+    // 헤더 행과 폐지 행 제거, 리(里) 단위 제외
+    .filter((r) => r.code && /^\d{10}$/.test(r.code) && r.status === "존재")
+    .filter((r) => levelOf(r.code) !== "ri");
 
   // 실제 존재하는 sido 코드 집합 (외래키 안전을 위해 참조 전 확인용)
   const sidoCodes = new Set(
