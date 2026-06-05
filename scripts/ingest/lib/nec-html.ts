@@ -17,7 +17,7 @@ export type ParseResult =
   | { kind: "no-data" };
 
 const META_HEADERS = new Set([
-  "읍면동명", "투표구명", "구분", "선거인수", "투표수",
+  "선거구명", "읍면동명", "투표구명", "구분", "선거인수", "투표수",
   "정당별 득표수", "후보자별 득표수",
   "계", "무효", "무효투표수", "기권자수",
 ]);
@@ -145,6 +145,8 @@ export interface ParsedStationRow {
   validVotes: number;
   invalidVotes: number;
   parties: ParsedParty[];
+  // 지역구 race (necCode=2/6) 에만 채워짐. 같은 시·군·구 안 여러 선거구 식별용
+  district?: string;
 }
 
 export type StationsParseResult =
