@@ -27,19 +27,23 @@ const ALIASES: { alias: string; partyId: string }[] = PARTIES.flatMap((p) =>
 ).sort((a, b) => b.alias.length - a.alias.length);
 
 export function resolveParty(rawName: string, electionDate: string, electionId?: string): string | null {
+  // electionDate 는 향후 alias 시점 분기 가능성 위해 시그니처 유지 — 현재 alias 영구화 정책으로 미사용.
+  void electionDate;
+  const name = rawName?.trim();
+  if (!name) return null;
   // 1) override 우선
   if (electionId) {
     for (const o of OVERRIDES) {
-      if (o.electionId === electionId && rawName.startsWith(o.rawName)) return o.partyId;
+      if (o.electionId === electionId && name.startsWith(o.rawName)) return o.partyId;
     }
   }
   // 2) prefix match (≥3자 alias)
   for (const a of ALIASES) {
-    if (a.alias.length >= 3 && rawName.startsWith(a.alias)) return a.partyId;
+    if (a.alias.length >= 3 && name.startsWith(a.alias)) return a.partyId;
   }
   // 3) exact match (단일 정당명 — 비례)
   for (const a of ALIASES) {
-    if (rawName.trim() === a.alias) return a.partyId;
+    if (name === a.alias) return a.partyId;
   }
   return null;
 }

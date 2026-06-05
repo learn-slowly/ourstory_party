@@ -16,4 +16,17 @@ describe("resolveParty", () => {
   it("미매핑 후보 → null", () => {
     expect(resolveParty("듣도보도못한당\n홍길동", "2024-04-10")).toBe(null);
   });
+  it("빈/공백 rawName → null", () => {
+    expect(resolveParty("", "2024-04-10")).toBe(null);
+    expect(resolveParty("   ", "2024-04-10")).toBe(null);
+  });
+  it("2자 alias 는 prefix match 안 됨 (≥3자 가드)", () => {
+    // 만약 'XX' 같은 2자 alias 가 있어도 prefix 매칭 X
+    // — 직접 확인은 alias seed 에 2자 없음. 대신 짧은 가짜 alias 대비 가드 동작만 확인:
+    expect(resolveParty("XY홍길동", "2024-04-10")).toBe(null);
+  });
+  it("longest alias wins — 더불어민주연합 > 더불어민주당", () => {
+    // 2024 비례: '더불어민주연합' 이 별도 정당 (democratic_alliance_2024)
+    expect(resolveParty("더불어민주연합", "2024-04-10")).toBe("democratic_alliance_2024");
+  });
 });
