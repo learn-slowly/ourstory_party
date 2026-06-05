@@ -42,9 +42,7 @@ export function parseFormatC(filePath: string): ParsedElection {
     raw: false,
   });
 
-  const header = (grid[0] ?? []).map((c) =>
-    (c ?? "").toString().trim().replace("\n", ""),
-  );
+  const header = (grid[0] ?? []).map((c) => (c ?? "").toString().trim().replace(/\s+/g, ""));
   const idxSido = header.findIndex((c) => c === "시도" || c === "시도명");
   const idxSigungu = header.findIndex(
     (c) => c === "구시군" || c === "구시군명",
