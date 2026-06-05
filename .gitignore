@@ -54,5 +54,5 @@ data/processed/polling-stations/
 /.claude/
 
 # 정적 빌드 산출물 (재실행 시 재생성)
-data/parsed/
+# data/parsed/ 는 Vercel 빌드용으로 git 에 포함 — raw xlsx 부재 환경 대응
 public/data/static/
