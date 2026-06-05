@@ -22,4 +22,14 @@ describe("parseFormatA — 2024 지역구 종로구", () => {
     const kinds = new Set(r.rows.map((x) => x.kind));
     expect(kinds.has("el_day")).toBe(true);
   });
+  it("partyNames 는 메타 라벨(합계·계·소계 등) 미포함", () => {
+    const r = parseFormatA(fixture, { isProportional: false });
+    for (const n of r.partyNames) {
+      expect(["합계", "계", "소계", "무효투표수", "기권수"]).not.toContain(n);
+    }
+  });
+  it("isProportional=true 경로 — 같은 fixture smoke (parser crash X)", () => {
+    // 비례 fixture 는 Task 1.3 에서 별도 생성. 본 task 에선 옵션 토글이 crash 안 함만 확인.
+    expect(() => parseFormatA(fixture, { isProportional: true })).not.toThrow();
+  });
 });

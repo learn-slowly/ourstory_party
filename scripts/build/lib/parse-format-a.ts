@@ -52,10 +52,11 @@ export function parseFormatA(filePath: string, opts: OptsA): ParsedElection {
   // 후보자/정당명 = row[4] 의 idxVotes+1 ~ idxInvalid-1 (마지막은 "계" 컬럼이므로 제외)
   const partyStartCol = idxVotes + 1;
   const partyEndCol = idxInvalid; // exclusive
+  const PARTY_NAME_BLOCKLIST = new Set(["계", "합계", "소계", "무효투표수", "기권수", "선거인수", "투표수"]);
   const partyNamesRaw = (grid[4] ?? []).slice(partyStartCol, partyEndCol);
   const partyNames = partyNamesRaw
     .map((c) => (c ?? "").toString().trim())
-    .filter((c) => c && c !== "계");
+    .filter((c) => c && !PARTY_NAME_BLOCKLIST.has(c));
 
   // region 컬럼 위치 (지역구 vs 비례)
   const cols = opts.isProportional
