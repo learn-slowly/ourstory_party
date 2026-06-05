@@ -27,6 +27,7 @@ export interface PartyMeta {
   name: string;
   color: string;
   family: string;
+  satelliteOf?: string | null;
 }
 
 export interface RegionMeta {

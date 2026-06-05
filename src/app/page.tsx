@@ -1,22 +1,21 @@
 import { HomeView } from "../components/HomeView";
 import { parseSearchParams } from "../lib/url-state";
 import {
-  getTimeseries,
-  getFilterOptions,
-  getEmdsOfSigungu,
-  getStationsOfEmd,
-} from "../lib/queries";
-import { toRechartsData } from "../lib/series";
+  getIndex,
+  getRegionFile,
+  getStationFile,
+  listStationsOfEmd,
+} from "../lib/static-data";
+import { buildHomeChart, buildFilterOptions } from "../lib/static-series";
 
-export const dynamic = "force-dynamic";
+// 홈은 빌드 타임 SSG. URL searchParams 의존 분기는 클라이언트 라우터가 핸들 (Next.js 가 동적 segment 가 아닌 한 force-static 허용).
+export const dynamic = "force-static";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 // state.region 으로부터 cascading 에 필요한 sigungu/emd code 추출.
-// 픽커는 항상 부모 옵션 목록을 노출해야 하므로 (예: emd 선택 상태에서도 그 emd의 형제 emds 가 picker 에 보여야 함)
-// 현재 state.region 의 부모 chain 을 거슬러 sigungu·emd 컨텍스트를 잡는다.
 function deriveContext(rcode: string): { sigunguCode: string | null; emdCode: string | null } {
   if (rcode === "all" || !rcode) return { sigunguCode: null, emdCode: null };
   if (rcode.startsWith("station:")) {
@@ -46,13 +45,89 @@ export default async function Home({ searchParams }: PageProps) {
   const state = parseSearchParams(flat);
   const ctx = deriveContext(state.region);
 
-  const [series, filterOptions, emdOptions, stationOptions] = await Promise.all([
-    getTimeseries(state),
-    getFilterOptions(),
-    ctx.sigunguCode ? getEmdsOfSigungu(ctx.sigunguCode) : Promise.resolve([]),
-    ctx.emdCode ? getStationsOfEmd(ctx.emdCode) : Promise.resolve([]),
-  ]);
-  const { data, lines } = toRechartsData(series);
+  const index = await getIndex();
+  const filterOptions = buildFilterOptions({
+    parties: index.parties,
+    elections: index.elections,
+    sido: index.regions.sido,
+    sigunguByRegion: index.regions.sigunguByRegion,
+  });
+
+  // emd 옵션 — sigungu 가 잡혀있으면 index.regions.emdByRegion 에서 직접
+  const emdOptions = ctx.sigunguCode
+    ? (index.regions.emdByRegion?.[ctx.sigunguCode] ?? []).map((r) => ({ code: r.code, name: r.name }))
+    : [];
+
+  // station 옵션 — emd 가 잡혀있으면 그 emd 의 sigungu 이름 + emd 이름 으로 station 디렉토리 매칭.
+  // sigungu/emd 의 한국어 name 은 region 파일 메타 로 해석.
+  let stationOptions: { sigunguCode: string; emdCode: string; name: string }[] = [];
+  if (ctx.emdCode && ctx.sigunguCode) {
+    try {
+      const emdFile = await getRegionFile(ctx.emdCode);
+      const sigunguName = emdFile.parent?.name ?? "";
+      const emdName = emdFile.name;
+      if (sigunguName && emdName) {
+        const stations = await listStationsOfEmd(sigunguName, emdName);
+        stationOptions = stations.map((s) => ({
+          sigunguCode: ctx.sigunguCode!,
+          emdCode: ctx.emdCode!,
+          name: s.name,
+        }));
+      }
+    } catch {
+      // 해당 emd 의 region 파일이 없으면 station 옵션 비움 — 정적 빌드 누락 케이스
+    }
+  }
+
+  // 시계열 소스 — region/station 파일(들) 의 timeseries 모음
+  const sources: { timeseries: Record<string, import("../types/static").TimeseriesPoint[]> }[] = [];
+  if (state.region === "all") {
+    // 전국 — 17 개 sido 파일 합산. 누락 파일은 silently skip.
+    for (const s of index.regions.sido) {
+      try {
+        const f = await getRegionFile(s.code);
+        sources.push({ timeseries: f.timeseries });
+      } catch {
+        // skip
+      }
+    }
+  } else if (state.region.startsWith("station:")) {
+    // "station:SIGUNGUCODE:EMDCODE:NAME" — sigungu/emd 의 한국어 name 으로 station 파일 키 합성
+    const [, sigunguCode, emdCode, ...rest] = state.region.split(":");
+    const stationName = rest.join(":");
+    try {
+      const emdFile = await getRegionFile(emdCode);
+      const sigunguName = emdFile.parent?.name ?? "";
+      const emdName = emdFile.name;
+      if (sigunguName && emdName && stationName) {
+        const stationKey = `${sigunguName}-${emdName}-${stationName}`;
+        try {
+          const f = await getStationFile(stationKey);
+          sources.push({ timeseries: f.timeseries });
+        } catch {
+          // station 파일 누락 — 빈 시계열
+        }
+      }
+    } catch {
+      // emd 파일 누락 — 빈 시계열
+    }
+    void sigunguCode; // 코드 자체는 파일명 합성에 필요 없음 (이름이 키)
+  } else {
+    // sido/sigungu/emd 단일 region
+    try {
+      const f = await getRegionFile(state.region);
+      sources.push({ timeseries: f.timeseries });
+    } catch {
+      // 해당 region 파일 없음 — 빈 시계열
+    }
+  }
+
+  const { data, lines } = buildHomeChart({
+    state,
+    elections: index.elections,
+    parties: index.parties,
+    sources,
+  });
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">

@@ -28,6 +28,7 @@ interface SeedParty {
   name: string;
   family: string;
   color: string;
+  satelliteOf?: string | null;
 }
 
 export function buildIndex(): StaticIndex {
@@ -57,6 +58,7 @@ export function buildIndex(): StaticIndex {
       name: p.name,
       color: p.color,
       family: p.family,
+      satelliteOf: p.satelliteOf ?? null,
     })),
     regions: {
       sido: regions.sido,

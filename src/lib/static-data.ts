@@ -33,3 +33,30 @@ export async function listAllRegionCodes(): Promise<string[]> {
   const files = await readdir(path.join(ROOT, "region"));
   return files.filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
 }
+
+// emd 내 station 목록 — station 디렉토리에서 `{sigunguName}-{emdName}-...` prefix 매칭.
+// 정적 station 파일명 규칙: `{sigunguName}-{emdName}-{stationName}.json` (build-station.ts 참조).
+// 결과는 stationKey 와 표시용 name (== stationName) 쌍을 돌려줌. 정렬은 한국어 로케일 기준.
+let stationDirCache: string[] | null = null;
+async function listStationDir(): Promise<string[]> {
+  if (stationDirCache) return stationDirCache;
+  const { readdir } = await import("node:fs/promises");
+  const files = await readdir(path.join(ROOT, "station"));
+  stationDirCache = files
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => f.replace(/\.json$/, ""));
+  return stationDirCache;
+}
+
+export async function listStationsOfEmd(
+  sigunguName: string,
+  emdName: string,
+): Promise<{ stationKey: string; name: string }[]> {
+  const all = await listStationDir();
+  const prefix = `${sigunguName}-${emdName}-`;
+  const matched = all
+    .filter((key) => key.startsWith(prefix))
+    .map((key) => ({ stationKey: key, name: key.slice(prefix.length) }));
+  matched.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  return matched;
+}
