@@ -270,6 +270,12 @@ export async function processElection(
     // 정확 매칭
     const exact = sigunguByKey.get(`${sdName}|${wiwName}`);
     if (exact) return exact.code;
+    // 세종처럼 시·도 = 단일 sigungu 자치시. ourstory regions 가 sigungu parent 를 null 로
+    // 저장하는 케이스 — sdName == wiwName 일 때 "|sdName" 키로 한 번 더 시도.
+    if (sdName === wiwName) {
+      const parentNull = sigunguByKey.get(`|${wiwName}`);
+      if (parentNull) return parentNull.code;
+    }
     // 부분 매칭: wiwName="창원시의창구" / "부천시원미구" → sigungu.name 끝 포함
     const sidoCode = sidoByName.get(sdName)?.code;
     if (sidoCode) {
