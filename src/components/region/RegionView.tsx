@@ -1,25 +1,16 @@
-import type { regions as regionsTable } from "../../../db/schema";
 import type {
   RegionDistribution,
   ChildrenTable,
   PresubElDayResult,
   SeriesPoint,
-} from "@/lib/queries";
+  RegionContext,
+} from "@/lib/region-types";
 import { Breadcrumb } from "./Breadcrumb";
 import { ElectionPicker } from "./ElectionPicker";
 import { RegionPartyDist } from "./RegionPartyDist";
 import { RegionChildrenTable } from "./RegionChildrenTable";
 import { PresubVsElDay } from "./PresubVsElDay";
 import { RegionMiniSeries } from "./RegionMiniSeries";
-
-type RegionRow = typeof regionsTable.$inferSelect;
-
-interface RegionContext {
-  region: RegionRow;
-  ancestors: RegionRow[];
-  children: RegionRow[];
-  level: "sido" | "sigungu" | "emd";
-}
 
 interface ElectionLike {
   id: string;

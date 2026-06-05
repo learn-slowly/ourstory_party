@@ -1,7 +1,7 @@
 // scripts/build/lib/parse-format-e.ts
 // 형식 E — archive HTML 폴백 (NEC 다운로드 xlsx 미수신 election 용, 예: 2007 대선·2008 총선)
 import { readFile } from "node:fs/promises";
-import { parseVccp08Stations } from "../../ingest/lib/nec-html";
+import { parseVccp08Stations } from "./nec-html";
 import { ParsedElection, ParsedStationRow, RowKind } from "./types";
 
 // nec-html.ts 의 kind ("station" / "el_day" / "presub" / "abs" / "absentee" / "overseas" / "misc") →

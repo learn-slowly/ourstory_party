@@ -1,4 +1,4 @@
-import type { PresubElDayResult } from "@/lib/queries";
+import type { PresubElDayResult } from "@/lib/region-types";
 
 interface Props {
   presub: PresubElDayResult;

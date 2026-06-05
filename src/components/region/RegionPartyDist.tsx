@@ -1,4 +1,4 @@
-import type { RegionDistribution } from "@/lib/queries";
+import type { RegionDistribution } from "@/lib/region-types";
 
 interface Props {
   dist: RegionDistribution;

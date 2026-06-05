@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import type { SeriesPoint } from "@/lib/queries";
+import type { SeriesPoint } from "@/lib/region-types";
 
 interface Props {
   series: SeriesPoint[];

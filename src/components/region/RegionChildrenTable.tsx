@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ChildrenTable } from "@/lib/queries";
+import type { ChildrenTable } from "@/lib/region-types";
 import { justiceShareColor } from "@/lib/region-share-color";
 
 interface Props {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { toRechartsData, type ChartLine } from "../../src/lib/series";
-import type { SeriesPoint } from "../../src/lib/queries";
+import type { SeriesPoint } from "../../src/lib/region-types";
 
 const electionA = { id: "e1", date: "2022-06-01", type: "governor", name: "지선A", displayOrder: 1, isByelection: false };
 const electionB = { id: "e2", date: "2024-04-10", type: "general", name: "총선B", displayOrder: 2, isByelection: false };

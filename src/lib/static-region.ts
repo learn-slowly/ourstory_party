@@ -18,11 +18,8 @@ import type {
   PresubElDayResult,
   SeriesPoint,
   ElectionMeta as QueryElectionMeta,
-} from "@/lib/queries";
-
-// queries.ts 의 RegionContext 가 db schema 의 regions row 를 그대로 사용하므로 호환 형태를 직접 생성한다.
-// 실제 사용처(Breadcrumb)는 { code, name } 만 필요. displayOrder/level/parentCode 는 컴포넌트 표시에 영향 없음.
-type RegionRow = RegionContext["region"];
+  RegionRow,
+} from "@/lib/region-types";
 
 function toRegionRow(
   code: string,
