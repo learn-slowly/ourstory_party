@@ -38,15 +38,13 @@ function planRace(necCode: string, isLive: boolean): {
     "7": "2", // 국회 비례
   };
   const electionType = typeMap[necCode] ?? "4";
-  // 라이브 선거: 지역구(2)·기초의원지역구(6) 는 VCCP04 권장. 그 외 VCCP08.
-  // 역대 선거: 지역구(2)·기초의원지역구(6)·비례(7·8·9) 모두 VCCP04 (정당별 득표 열 포함).
-  let endpoint: "VCCP08" | "VCCP04";
-  if (isLive) {
-    endpoint = (necCode === "2" || necCode === "6") ? "VCCP04" : "VCCP08";
-  } else {
-    // 역대: 비례(7·8·9), 지역구(2·6) 등 모든 코드에서 VCCP04 가 정당 득표 열 제공
-    endpoint = "VCCP04";
-  }
+  // 라이브 NEC 모듈 (electionId 0020YYMMDD) — VCCP08 가 station + 정당/후보자 응답.
+  // 역대 archive (electionId 0000000000):
+  //   대선(necCode=1) → VCCP08 (station × 후보자 분해 응답 — 2017·2022·2025 확인)
+  //   그 외 (총선 지역구·비례·지선·보궐·교육감) → VCCP04 (emd × 정당/후보자 분해)
+  //     archive VCCP08 은 대선 외에는 "후보자별 득표수" colspan=1 단일 합만 줌 → 정당 매핑 불가
+  const useVccp08OnArchive = necCode === "1";
+  const endpoint: "VCCP08" | "VCCP04" = isLive || useVccp08OnArchive ? "VCCP08" : "VCCP04";
   return { sigunguLevel, endpoint, electionType };
 }
 
@@ -85,64 +83,82 @@ async function main() {
   }
 
   const dateYmd = String(election.date).replace(/-/g, "");
+  const necCode = election.necCode;
+  const necElectionId = election.necElectionId;
   // 라이브 vs 역대 — seed.necElectionId 에 따라 결정.
   // necElectionId === "0000000000" → 역대 endpoint (electionName 으로 필터).
   // 그 외 (예: "0020250603") → NEC 가 여전히 라이브 module 에 데이터 보존중 → 라이브 endpoint.
   // (이전 todayStr 비교는 잘못된 휴리스틱 — NEC 가 일부 라이브 데이터를 archive 이후에도 보존함)
-  const isLive = election.necElectionId !== "0000000000";
-  const plan = planRace(election.necCode, isLive);
+  // NEC 라이브 모듈에 데이터 있는 election 은 station-level 정당 응답 (VCCP08 라이브) 가능.
+  // 그 외 archive 는 emd-level 정당 응답 (VCCP04). seed.necElectionId !== "0000000000" 면
+  // 라이브 시도, 빈응답이면 archive fallback.
+  const hasLive = necElectionId !== "0000000000";
+  const livePlan = planRace(necCode, true);
+  const archivePlan = planRace(necCode, false);
 
   console.log(
     `▶ ${electionId} necCode=${election.necCode} ` +
-      `endpoint=${plan.endpoint} sigungu=${plan.sigunguLevel} live=${isLive} refresh=${refresh}`,
+      `hasLive=${hasLive} (live ${livePlan.endpoint} → archive ${archivePlan.endpoint} fallback) refresh=${refresh}`,
   );
 
-  // (cityCode, townCode?) 조합 생성
-  const targets: FetchParams[] = [];
+  // (cityCode, townCode?) 조합 생성 — 라이브·archive 두 후보 준비
+  type Target = { live?: FetchParams; archive: FetchParams };
+  const targets: Target[] = [];
   for (const city of CITY_CODES) {
-    if (!plan.sigunguLevel) {
-      targets.push({
-        electionId: isLive ? election.necElectionId : "0000000000",
+    if (!livePlan.sigunguLevel && !archivePlan.sigunguLevel) {
+      const base = (p: typeof livePlan): Omit<FetchParams, "electionId" | "townCode"> => ({
         electionName: dateYmd,
-        electionType: plan.electionType,
-        electionCode: election.necCode,
+        electionType: p.electionType,
+        electionCode: necCode,
         cityCode: city.code,
-        endpoint: plan.endpoint,
+        endpoint: p.endpoint,
+      });
+      targets.push({
+        live: hasLive ? { ...base(livePlan), electionId: necElectionId } : undefined,
+        archive: { ...base(archivePlan), electionId: "0000000000" },
       });
       continue;
     }
-    // townCode 목록 조회
     let towns;
     try {
-      towns = await fetchTownCodes(
-        isLive ? election.necElectionId : "0020250603", // 역대도 임의 electionId 면 됨
-        city.code,
-      );
+      // townCode 목록 조회는 항상 현재 active 한 라이브 ID 사용 — 과거 election ID 로는 빈 응답.
+      towns = await fetchTownCodes("0020250603", city.code);
     } catch (e) {
       console.warn(`  townCode 조회 실패 ${city.name}: ${(e as Error).message}`);
       continue;
     }
     for (const t of towns) {
-      targets.push({
-        electionId: isLive ? election.necElectionId : "0000000000",
+      const base = (p: typeof livePlan): Omit<FetchParams, "electionId"> => ({
         electionName: dateYmd,
-        electionType: plan.electionType,
-        electionCode: election.necCode,
+        electionType: p.electionType,
+        electionCode: necCode,
         cityCode: city.code,
         townCode: t.code,
-        endpoint: plan.endpoint,
+        endpoint: p.endpoint,
+      });
+      targets.push({
+        live: hasLive ? { ...base(livePlan), electionId: necElectionId } : undefined,
+        archive: { ...base(archivePlan), electionId: "0000000000" },
       });
     }
   }
 
   console.log(`  대상: ${targets.length} 호출`);
 
-  // 선거별 서브디렉터리: data/raw/polling-stations/{electionId}/
   const CACHE_DIR = path.join(RAW_BASE, electionId);
 
-  let ok = 0, noData = 0, failed = 0, cached = 0;
-  await pool(targets, CONCURRENCY, async (p) => {
-    const r = await fetchOne(p, CACHE_DIR, { refresh });
+  let ok = 0, noData = 0, failed = 0, cached = 0, fallbackUsed = 0;
+  await pool(targets, CONCURRENCY, async (t) => {
+    // 라이브 먼저 시도 — 빈 응답이면 archive
+    let r: Awaited<ReturnType<typeof fetchOne>> | null = null;
+    if (t.live) {
+      const r1 = await fetchOne(t.live, CACHE_DIR, { refresh });
+      if (r1.status === "ok") r = r1;
+    }
+    if (r === null) {
+      r = await fetchOne(t.archive, CACHE_DIR, { refresh });
+      if (t.live && r.status === "ok") fallbackUsed++;
+    }
     if (r.cached) cached++;
     if (r.status === "ok") ok++;
     else if (r.status === "no-data") noData++;
@@ -150,7 +166,8 @@ async function main() {
   });
 
   console.log(
-    `✓ ok=${ok} no-data=${noData} failed=${failed} cached=${cached}/${targets.length}`,
+    `✓ ok=${ok} no-data=${noData} failed=${failed} cached=${cached}/${targets.length}` +
+      (fallbackUsed > 0 ? ` (archive fallback=${fallbackUsed})` : ""),
   );
   await sql.end();
   process.exit(failed > 0 ? 1 : 0);

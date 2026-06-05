@@ -46,9 +46,12 @@ async function main() {
       },
     });
 
+    // alias 의 valid_from 은 영구(1900-01-01) — 정당 출범 이전 명칭(전신)도 동일 정당으로 매핑.
+    // 예: 자유한국당·새누리당·한나라당 등 보수 양당 전신을 people_power 로 통합.
+    // 시점별 분기가 필요한 alias (예: 2025 권영국=민주노동당→정의당) 는 election_party_overrides 로 처리.
     for (const alias of p.aliases) {
       await db.insert(partyAliases).values({
-        alias, partyId: p.id, validFrom: p.activeFrom ?? "1900-01-01",
+        alias, partyId: p.id, validFrom: "1900-01-01",
       }).onConflictDoNothing();
     }
   }

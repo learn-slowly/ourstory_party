@@ -186,10 +186,17 @@ export function parseVccp08Stations(html: string): StationsParseResult {
   const rows: ParsedStationRow[] = [];
   let currentEmd: string | null = null;
 
-  // 예상 최소 셀 수: c0 + c1 + 선거인수 + 투표수 + [정당 N] + 계 + 무효 + 기권
-  // VCCP04 일부 지역구 파일은 선거구명 열이 추가되어 컬럼 수가 다를 수 있으므로
-  // tail(계·무효·기권) 은 뒤에서부터 찾음
-  const minCols = 2 + 2 + partyNames.length + 3;
+  // thead 의 leading 컬럼 갯수 동적 감지 — "선거인수" 컬럼 인덱스 = leading 갯수.
+  //   2017+ 대선·비례·지선: ['읍면동명','투표구명','선거인수',...] → leading=2
+  //   2002~2012 대선:        ['투표구명','선거인수',...]              → leading=1
+  //   총선 지역구 VCCP04:    ['선거구명','읍면동명','구분','선거인수',...] → leading=3
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const headerThs = $("table#table01 thead tr").first().find("th").map((_i: number, th: any) => $(th).text().trim()).get() as string[];
+  const votersHeaderIdx = headerThs.indexOf("선거인수");
+  const leadingCount = votersHeaderIdx > 0 ? votersHeaderIdx : 2;
+
+  // 예상 최소 셀 수: leading + 선거인수 + 투표수 + [정당 N] + 계 + 무효 + 기권
+  const minCols = leadingCount + 2 + partyNames.length + 3;
 
   const num = (s: string) => Number(s.replace(/,/g, "")) || 0;
 
@@ -218,8 +225,30 @@ export function parseVccp08Stations(html: string): StationsParseResult {
 
     if (cells.length < minCols) return;
 
-    // row-level offset 보강 — 일부 파일에서 행마다 selectively offset 적용 필요한 경우 보조 휴리스틱.
-    // 기본은 file-level offset 사용, 단 cells[1]==="" 이고 cells[0] 가 데이터 라벨이면 그 row 는 offset=0 (기존 휴리스틱)
+    // leading=1 (2002~2012 대선): cells = [c0=stationName/메타, voters, votes, p1..pN, 계, 무효, 기권]
+    if (leadingCount === 1) {
+      const c0 = cells[0];
+      if (c0 === "합계" || c0 === "계") return; // 시·도 합계 skip
+      const votersIdx1 = 1;
+      const votesIdx1 = 2;
+      const partyStartIdx = 3;
+      const tailStart = partyStartIdx + partyNames.length;
+      const meta = META_LABELS.get(c0);
+      const kind: ParsedStationRow["kind"] = meta ?? "station";
+      rows.push({
+        emdName: null, // 2012 이전 응답엔 emd 컬럼 없음 — emdCode=null 로 적재
+        name: c0,
+        kind,
+        totalVoters: num(cells[votersIdx1] ?? "0"),
+        totalVotes: num(cells[votesIdx1] ?? "0"),
+        validVotes: num(cells[tailStart] ?? "0"),
+        invalidVotes: num(cells[tailStart + 1] ?? "0"),
+        parties: partyNames.map((name, i) => ({ name, votes: num(cells[partyStartIdx + i] ?? "0") })),
+      });
+      return;
+    }
+
+    // leading>=2 (기존 로직): row-level offset 보강
     let offset = fileOffset;
     if (fileOffset === 0 && cells[1] && cells[2] && isNaN(Number(cells[2].replace(/,/g, "")))) {
       // 다선거구 파일의 emd row — cells[1]=emd, cells[2]=label, offset=1 임시
