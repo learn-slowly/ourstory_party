@@ -21,6 +21,7 @@
     "ingest:seed": "pnpm ingest:seed:regions && pnpm ingest:seed:parties && pnpm ingest:seed:elections && pnpm ingest:seed:overrides",
     "ingest:election": "dotenv -e .env.local -- tsx scripts/ingest/ingest-election.ts",
     "ingest:pilot": "dotenv -e .env.local -- tsx scripts/ingest/ingest-pilot.ts",
+    "ingest:poll-live": "dotenv -e .env.local -- tsx scripts/ingest/poll-live.ts",
     "ingest:validate": "dotenv -e .env.local -- tsx scripts/ingest/ingest-pilot.ts --dry-run",
     "verify:schema": "dotenv -e .env.local -- tsx scripts/verify-schema.ts",
     "db:rls": "dotenv -e .env.local -- tsx scripts/apply-rls.ts"
