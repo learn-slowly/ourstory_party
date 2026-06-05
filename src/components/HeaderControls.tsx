@@ -6,19 +6,50 @@ import type { HomeState } from "../lib/url-state";
 import { encodeState } from "../lib/url-state";
 
 interface RegionOpt { code: string; level: string; name: string; parentCode?: string | null; }
+interface EmdOpt { code: string; name: string; }
+interface StationOpt { sigunguCode: string; emdCode: string; name: string; }
+interface PartyOpt { id: string; name: string; family: string; color: string; satelliteOf?: string | null; }
 
-// state.region 으로부터 그 region 의 시·도 code 추출.
-// "all" → "all", sido code (XX00000000) → 그 자체, sigungu code → 시·도 prefix(2) + 8 zeros.
+// state.region 분류 — picker cascading 에 사용.
 function sidoOfRegion(rcode: string): string {
-  if (rcode === "all") return "all";
+  if (rcode === "all" || !rcode) return "all";
+  if (rcode.startsWith("station:")) {
+    const sigungu = rcode.split(":")[1] ?? "";
+    return sigungu ? sigungu.slice(0, 2) + "00000000" : "all";
+  }
+  if (rcode.startsWith("9")) return rcode.slice(1, 3) + "00000000";
   if (rcode.endsWith("00000000")) return rcode;
   return rcode.slice(0, 2) + "00000000";
 }
-interface PartyOpt { id: string; name: string; family: string; color: string; satelliteOf?: string | null; }
+function sigunguOfRegion(rcode: string): string | null {
+  if (rcode === "all" || !rcode) return null;
+  if (rcode.startsWith("station:")) return rcode.split(":")[1] ?? null;
+  if (rcode.startsWith("9")) return rcode.slice(1, 6) + "00000";
+  if (!/^\d{10}$/.test(rcode)) return null;
+  if (rcode.endsWith("00000000")) return null;
+  if (rcode.endsWith("00000")) return rcode;
+  return rcode.slice(0, 5) + "00000"; // legal emd → parent sigungu
+}
+function emdOfRegion(rcode: string): string | null {
+  if (rcode === "all" || !rcode) return null;
+  if (rcode.startsWith("station:")) return rcode.split(":")[2] ?? null;
+  if (rcode.startsWith("9")) return rcode;
+  if (!/^\d{10}$/.test(rcode)) return null;
+  if (rcode.endsWith("00000")) return null;
+  if (rcode.endsWith("00")) return rcode;
+  return null;
+}
+function stationNameOf(rcode: string): string | null {
+  if (!rcode.startsWith("station:")) return null;
+  const parts = rcode.split(":");
+  return parts.slice(3).join(":") || null;
+}
 
 interface Props {
   state: HomeState;
   regions: RegionOpt[];
+  emdOptions: EmdOpt[];
+  stationOptions: StationOpt[];
   types: string[];
   parties: PartyOpt[];
 }
@@ -36,7 +67,7 @@ const TYPE_LABEL: Record<string, string> = {
   superintendent: "교육감",
 };
 
-export function HeaderControls({ state, regions, types, parties }: Props) {
+export function HeaderControls({ state, regions, emdOptions, stationOptions, types, parties }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -60,7 +91,10 @@ export function HeaderControls({ state, regions, types, parties }: Props) {
 
   const sidos = regions.filter((r) => r.level === "sido");
   const selSido = sidoOfRegion(state.region);
-  // 선택된 시·도의 시·군·구 — code prefix(2) 일치 (parentCode 가 sido 가 아닌 sub-구 케이스도 포함하려면 prefix 필터가 더 안전)
+  const selSigungu = sigunguOfRegion(state.region);
+  const selEmd = emdOfRegion(state.region);
+  const selStation = stationNameOf(state.region);
+
   const sigungus = selSido === "all"
     ? []
     : regions
@@ -68,13 +102,25 @@ export function HeaderControls({ state, regions, types, parties }: Props) {
         .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
   function onSidoChange(next: string) {
-    // 시·도 변경 시 시·군 reset to 시·도 전체 (또는 전국)
     push({ ...state, region: next });
   }
-
   function onSigunguChange(next: string) {
-    // "all" → 시·도 전체 (state.region = selSido). 시·군 code 면 그대로.
     push({ ...state, region: next === "all" ? selSido : next });
+  }
+  function onEmdChange(next: string) {
+    // emd "(전체)" 선택 시 sigungu 단위로 복귀
+    push({ ...state, region: next === "all" ? (selSigungu ?? selSido) : next });
+  }
+  function onStationChange(next: string) {
+    // station "(전체)" 선택 시 emd 단위로 복귀
+    if (next === "all") {
+      push({ ...state, region: selEmd ?? selSigungu ?? selSido });
+      return;
+    }
+    // next 는 station name. emd + sigungu code 와 합성
+    const sigungu = selSigungu ?? "";
+    const emd = selEmd ?? "";
+    push({ ...state, region: `station:${sigungu}:${emd}:${next}` });
   }
 
   return (
@@ -90,13 +136,31 @@ export function HeaderControls({ state, regions, types, parties }: Props) {
           {sidos.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
         </select>
         <select
-          value={state.region === selSido ? "all" : state.region}
+          value={selSigungu ?? "all"}
           onChange={(e) => onSigunguChange(e.target.value)}
           disabled={selSido === "all"}
           className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
         >
           <option value="all">(전체)</option>
           {sigungus.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+        </select>
+        <select
+          value={selEmd ?? "all"}
+          onChange={(e) => onEmdChange(e.target.value)}
+          disabled={!selSigungu || emdOptions.length === 0}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
+        >
+          <option value="all">(전체)</option>
+          {emdOptions.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+        </select>
+        <select
+          value={selStation ?? "all"}
+          onChange={(e) => onStationChange(e.target.value)}
+          disabled={!selEmd || stationOptions.length === 0}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
+        >
+          <option value="all">(전체)</option>
+          {stationOptions.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
         </select>
       </label>
 

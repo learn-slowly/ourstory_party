@@ -57,31 +57,109 @@ export async function getTimeseries(state: HomeState): Promise<SeriesPoint[]> {
     return p?.satelliteOf ?? pid;
   }
 
-  // 3) 대상 region 셋
+  // 3) 대상 region 셋 + 데이터 소스 결정
+  //    sido/sigungu → vote_totals + region_totals
+  //    emd → polling_station_votes JOIN polling_stations (kind 전부 합산) + polling_station_totals
+  //    "station:SIGUNGU:EMD:NAME" → polling_station_votes (해당 station 만)
   const allRegions = await db.select().from(regions);
-  const sidoCodes = allRegions.filter((r) => r.level === "sido").map((r) => r.code);
-  const targetRegions: string[] = state.region === "all" ? sidoCodes : [state.region];
-
-  // 4) vote_totals + region_totals 조회
   const electionIds = filteredElections.map((e) => e.id);
-  const votes = await db
-    .select()
-    .from(voteTotals)
-    .where(
-      and(
-        inArray(voteTotals.electionId, electionIds),
-        inArray(voteTotals.regionCode, targetRegions),
-      ),
-    );
-  const regs = await db
-    .select()
-    .from(regionTotals)
-    .where(
-      and(
-        inArray(regionTotals.electionId, electionIds),
-        inArray(regionTotals.regionCode, targetRegions),
-      ),
-    );
+
+  // 한 region 코드의 level 판정 — pattern match (스키마 enum 과 일치 시킴)
+  function regionLevelOf(code: string): "sido" | "sigungu" | "emd" | "station" | "unknown" {
+    if (!code) return "unknown";
+    if (code.startsWith("station:")) return "station";
+    if (code.startsWith("9")) return "emd"; // synthetic admin emd
+    if (!/^\d{10}$/.test(code)) return "unknown";
+    if (code.endsWith("00000000")) return "sido";
+    if (code.endsWith("00000")) return "sigungu";
+    if (code.endsWith("00")) return "emd";
+    return "unknown";
+  }
+
+  const level = state.region === "all" ? "all" : regionLevelOf(state.region);
+
+  type VoteRow = { electionId: string; partyId: string; votes: number };
+  type RegTotalRow = { electionId: string; totalVotes: number | null };
+  let votes: VoteRow[] = [];
+  let regs: RegTotalRow[] = [];
+
+  if (level === "all" || level === "sido" || level === "sigungu") {
+    const sidoCodes = allRegions.filter((r) => r.level === "sido").map((r) => r.code);
+    const targetRegions: string[] = state.region === "all" ? sidoCodes : [state.region];
+    votes = await db
+      .select({ electionId: voteTotals.electionId, partyId: voteTotals.partyId, votes: voteTotals.votes })
+      .from(voteTotals)
+      .where(
+        and(
+          inArray(voteTotals.electionId, electionIds),
+          inArray(voteTotals.regionCode, targetRegions),
+        ),
+      );
+    regs = await db
+      .select({ electionId: regionTotals.electionId, totalVotes: regionTotals.totalVotes })
+      .from(regionTotals)
+      .where(
+        and(
+          inArray(regionTotals.electionId, electionIds),
+          inArray(regionTotals.regionCode, targetRegions),
+        ),
+      );
+  } else if (level === "emd") {
+    // polling_station_votes 합산. polling_station_totals 합 = totalVotes.
+    const raw = await sql<{ election_id: string; party_id: string | null; votes: number; total_votes: number }[]>`
+      SELECT
+        s.election_id, v.party_id,
+        sum(v.votes)::int AS votes,
+        sum(coalesce(t.total_votes, 0))::int AS total_votes
+      FROM polling_stations s
+      LEFT JOIN polling_station_votes v ON v.station_id = s.id
+      LEFT JOIN polling_station_totals t ON t.station_id = s.id
+      WHERE s.election_id = ANY(${electionIds}::text[])
+        AND s.emd_code = ${state.region}
+      GROUP BY s.election_id, v.party_id
+    `;
+    for (const r of raw) {
+      if (r.party_id) votes.push({ electionId: r.election_id, partyId: r.party_id, votes: r.votes });
+    }
+    // total_votes 는 election 단위 합 — party 가 NULL 인 행도 분모에 포함되므로 별도 query
+    const totRaw = await sql<{ election_id: string; total: number }[]>`
+      SELECT s.election_id, sum(coalesce(t.total_votes, 0))::int AS total
+      FROM polling_stations s
+      LEFT JOIN polling_station_totals t ON t.station_id = s.id
+      WHERE s.election_id = ANY(${electionIds}::text[])
+        AND s.emd_code = ${state.region}
+      GROUP BY s.election_id
+    `;
+    regs = totRaw.map((r) => ({ electionId: r.election_id, totalVotes: r.total }));
+  } else if (level === "station") {
+    // "station:SIGUNGU:EMD:NAME"
+    const [, sigunguCode, emdCode, ...nameParts] = state.region.split(":");
+    const name = nameParts.join(":");
+    const raw = await sql<{ election_id: string; party_id: string | null; votes: number }[]>`
+      SELECT s.election_id, v.party_id, sum(v.votes)::int AS votes
+      FROM polling_stations s
+      LEFT JOIN polling_station_votes v ON v.station_id = s.id
+      WHERE s.election_id = ANY(${electionIds}::text[])
+        AND s.sigungu_code = ${sigunguCode}
+        AND s.emd_code = ${emdCode}
+        AND s.name = ${name}
+      GROUP BY s.election_id, v.party_id
+    `;
+    for (const r of raw) {
+      if (r.party_id) votes.push({ electionId: r.election_id, partyId: r.party_id, votes: r.votes });
+    }
+    const totRaw = await sql<{ election_id: string; total: number }[]>`
+      SELECT s.election_id, sum(coalesce(t.total_votes, 0))::int AS total
+      FROM polling_stations s
+      LEFT JOIN polling_station_totals t ON t.station_id = s.id
+      WHERE s.election_id = ANY(${electionIds}::text[])
+        AND s.sigungu_code = ${sigunguCode}
+        AND s.emd_code = ${emdCode}
+        AND s.name = ${name}
+      GROUP BY s.election_id
+    `;
+    regs = totRaw.map((r) => ({ electionId: r.election_id, totalVotes: r.total }));
+  }
 
   // 5) election × party 합산
   type Acc = { votes: number };
@@ -184,6 +262,34 @@ export async function getFilterOptions() {
     types: allElectionTypes.map((r) => r.type),
     parties: allParties,
   };
+}
+
+// ─── 홈 picker cascading 조건부 query ─────────────────────────────────────
+
+/**
+ * 한 sigungu 의 emd children (legal 법정동 emd + synthetic admin emd 모두).
+ * sigungu_code 가 `XXXXX00000` 일 때 emd parent_code 는 정확히 그 sigungu_code.
+ */
+export async function getEmdsOfSigungu(sigunguCode: string): Promise<{ code: string; name: string }[]> {
+  const rows = await db
+    .select({ code: regions.code, name: regions.name })
+    .from(regions)
+    .where(and(eq(regions.level, "emd"), eq(regions.parentCode, sigunguCode)));
+  return rows.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
+
+/**
+ * 한 emd 안에서 적재된 polling_stations 의 distinct station 이름. kind='station' 만.
+ * 같은 이름이 여러 election 에 등장 시 한 옵션으로 표시 (cross-election 매칭은 name+sigungu+emd).
+ */
+export async function getStationsOfEmd(emdCode: string): Promise<{ sigunguCode: string; emdCode: string; name: string }[]> {
+  const rows = await sql<{ sigungu_code: string; name: string }[]>`
+    SELECT DISTINCT sigungu_code, name
+    FROM polling_stations
+    WHERE emd_code = ${emdCode} AND kind = 'station'
+    ORDER BY name
+  `;
+  return rows.map((r) => ({ sigunguCode: r.sigungu_code, emdCode, name: r.name }));
 }
 
 export interface LiveSidoCell {
