@@ -23,9 +23,11 @@ export function toRechartsData(points: SeriesPoint[]): { data: ChartRow[]; lines
     const eid = p.election.id;
     let row = rowsByElection.get(eid);
     if (!row) {
+      // 연도 prefix — "2024 제22대 국회의원선거 — 비례대표" 형식. 시계열 위치 즉시 파악
+      const year = String(p.election.date).slice(0, 4);
       row = {
         electionId: eid,
-        electionLabel: p.election.name,
+        electionLabel: `${year} ${p.election.name}`,
         date: p.election.date,
         displayOrder: p.election.displayOrder ?? 0,
       };

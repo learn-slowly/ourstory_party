@@ -15,8 +15,8 @@ describe("toRechartsData", () => {
   it("election 행 + 정당 컬럼 wide 매트릭스 + lines 메타", () => {
     const { data, lines } = toRechartsData(SAMPLE);
     expect(data).toEqual([
-      { electionId: "e1", electionLabel: "지선A", date: "2022-06-01", displayOrder: 1, justice: 10.0, labor: 5.0 },
-      { electionId: "e2", electionLabel: "총선B", date: "2024-04-10", displayOrder: 2, justice: 6.7 },
+      { electionId: "e1", electionLabel: "2022 지선A", date: "2022-06-01", displayOrder: 1, justice: 10.0, labor: 5.0 },
+      { electionId: "e2", electionLabel: "2024 총선B", date: "2024-04-10", displayOrder: 2, justice: 6.7 },
     ]);
     expect(lines).toEqual<ChartLine[]>([
       { partyId: "justice", name: "정의당", color: "#FFCC00", family: "justice" },
