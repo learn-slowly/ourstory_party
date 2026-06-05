@@ -15,6 +15,13 @@
       "when": 1780559804336,
       "tag": "0001_certain_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780627530384,
+      "tag": "0002_abandoned_iron_lad",
+      "breakpoints": true
     }
   ]
 }

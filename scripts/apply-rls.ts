@@ -1,8 +1,9 @@
 import postgres from "postgres";
 
 const TABLES = [
-  "regions", "parties", "party_aliases", "elections",
-  "election_party_overrides", "vote_totals", "region_totals", "candidates",
+  "candidates", "election_party_overrides", "elections", "parties",
+  "party_aliases", "polling_station_totals", "polling_station_votes",
+  "polling_stations", "region_totals", "regions", "vote_totals",
 ];
 
 async function main() {

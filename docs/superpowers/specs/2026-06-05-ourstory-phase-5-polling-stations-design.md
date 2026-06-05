@@ -159,7 +159,7 @@ townCode 목록은 `selectbox_townCodeJson.json?electionId={electionId}&cityCode
 
 | Phase | 산출물 | 의존 | 검증 |
 |-------|--------|------|------|
-| **5.0 스키마** | drizzle 마이그레이션 + RLS 정책 + verify-schema 통과 | — | `pnpm tsx scripts/verify-schema.ts` 가 10개 테이블 확인 |
+| **5.0 스키마** | drizzle 마이그레이션 + RLS 정책 + verify-schema 통과 | — | `pnpm verify:schema` 가 11개 테이블 확인 (기존 8 + 신규 3) |
 | **5.1 파서** | `parse-polling-stations.ts` + `lib/nec-html.ts` 확장 + 단위 테스트 | 5.0 | 실제 HTML fixture 4종(2025대선·2024총선지역구·2022지선광역비례·2020총선비례) 각 3 케이스 PASS |
 | **5.2 fetcher** | `fetch-polling-stations.ts` (동시성 5, 재시도 3, 6s 타임아웃, raw 캐시) | 5.1 | 2025 대선 단일 race 호출 → raw 디렉터리에 17 시·도 파일 생성 |
 | **5.3 ingest 검증** | `ingest-polling-stations.ts` + `2025-presidential` 단일 적재 | 5.2 | station 수 ≈ 14k ±10%; 매핑률 ≥95%; vote_totals 시·도 합 cross-check ±0.5% |

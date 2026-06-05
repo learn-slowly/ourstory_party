@@ -1,5 +1,6 @@
 import {
-  pgTable, text, integer, date, boolean, numeric, timestamp, bigserial, primaryKey, index,
+  pgTable, text, integer, date, boolean, numeric, timestamp, bigserial,
+  bigint, primaryKey, index, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // 지역: 시·도 / 시·군·구 / 읍·면·동
@@ -114,4 +115,55 @@ export const electionPartyOverrides = pgTable(
     note: text("note"),
   },
   (t) => ({ pk: primaryKey({ columns: [t.electionId, t.rawName] }) }),
+);
+
+// 투표소(NEC 용어 "투표구") — 한 election 안에서 sigungu 별로 유일한 name
+export const pollingStations = pgTable(
+  "polling_stations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    electionId: text("election_id").notNull().references(() => elections.id),
+    sigunguCode: text("sigungu_code").notNull().references(() => regions.code),
+    emdCode: text("emd_code").references(() => regions.code),
+    name: text("name").notNull(),
+    kind: text("kind", {
+      enum: ["station", "presub", "abs", "absentee", "overseas", "misc"],
+    }).notNull(),
+    necTownCode: text("nec_town_code"),
+  },
+  (t) => ({
+    uq: uniqueIndex("ps_uq").on(t.electionId, t.sigunguCode, t.name),
+    emdIdx: index("ps_emd_idx").on(t.electionId, t.emdCode),
+  }),
+);
+
+// 투표소 단위 정당 득표
+export const pollingStationVotes = pgTable(
+  "polling_station_votes",
+  {
+    stationId: bigint("station_id", { mode: "number" })
+      .notNull()
+      .references(() => pollingStations.id, { onDelete: "cascade" }),
+    partyId: text("party_id").references(() => parties.id),
+    rawName: text("raw_name").notNull(),
+    votes: integer("votes").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.stationId, t.rawName] }),
+    partyIdx: index("psv_party_idx").on(t.partyId),
+  }),
+);
+
+// 투표소 단위 분모
+export const pollingStationTotals = pgTable(
+  "polling_station_totals",
+  {
+    stationId: bigint("station_id", { mode: "number" })
+      .primaryKey()
+      .references(() => pollingStations.id, { onDelete: "cascade" }),
+    totalVoters: integer("total_voters"),
+    totalVotes: integer("total_votes"),
+    validVotes: integer("valid_votes"),
+    invalidVotes: integer("invalid_votes"),
+  },
 );
