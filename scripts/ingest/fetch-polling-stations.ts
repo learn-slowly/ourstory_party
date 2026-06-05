@@ -26,10 +26,10 @@ function planRace(necCode: string, isLive: boolean): {
   endpoint: "VCCP08" | "VCCP04";
   electionType: string;
 } {
-  // 라이브 모드: 대선·광역단체장·교육감(1·3·11) 은 시·도 단위만 제공.
-  // 역대(historical) 모드: NEC archive 가 모든 race 를 sigungu 단위로 보관 → sigungu 호출.
-  const sigunguOnly = new Set(["1", "3", "11"]);
-  const sigunguLevel = isLive ? !sigunguOnly.has(necCode) : true;
+  // NEC 가 모든 race 를 sigungu 단위로 데이터 제공 (라이브든 historical 이든).
+  // 라이브 대선·광역단체장·교육감 도 sigungu 단위 응답 확인됨 (2025 대선 진주시 4803 → 121KB + 투표구별 row).
+  void isLive; // 향후 다른 분기 케이스 위해 파라미터 유지
+  const sigunguLevel = true;
   // necCode → electionType
   const typeMap: Record<string, string> = {
     "1": "1", // 대통령
@@ -85,10 +85,11 @@ async function main() {
   }
 
   const dateYmd = String(election.date).replace(/-/g, "");
-  // 진행 중인 선거(당일 또는 미래)는 라이브 엔드포인트, 과거 선거는 역대(0000000000) 엔드포인트
-  const electionDateStr = String(election.date); // "YYYY-MM-DD"
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const isLive = electionDateStr >= todayStr;
+  // 라이브 vs 역대 — seed.necElectionId 에 따라 결정.
+  // necElectionId === "0000000000" → 역대 endpoint (electionName 으로 필터).
+  // 그 외 (예: "0020250603") → NEC 가 여전히 라이브 module 에 데이터 보존중 → 라이브 endpoint.
+  // (이전 todayStr 비교는 잘못된 휴리스틱 — NEC 가 일부 라이브 데이터를 archive 이후에도 보존함)
+  const isLive = election.necElectionId !== "0000000000";
   const plan = planRace(election.necCode, isLive);
 
   console.log(

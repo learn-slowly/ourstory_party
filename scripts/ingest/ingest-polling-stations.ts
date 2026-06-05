@@ -79,15 +79,30 @@ async function main() {
   // election.date 는 drizzle date 타입이므로 문자열로 변환
   const electionDate = String(election.date);
 
+  // 이 election 의 election_party_overrides — alias 보다 우선해 강제 매핑
+  // (예: 2025 대선 권영국 — 민주노동당 → justice 합산. process.ts 동일 정책).
+  const overrideRows = await sql<{ raw_name: string; party_id: string }[]>`
+    SELECT raw_name, party_id FROM election_party_overrides WHERE election_id = ${electionId}
+  `;
+  const overrides = overrideRows.map((r) => ({ raw_name: r.raw_name, party_id: r.party_id }));
+
   // resolvePartyId 캐시 (같은 raw name 반복 호출 회피).
   // 대선·지역구는 raw_name 이 후보자명 형식 ("정의당심상정") 이라 exact 매칭 실패 →
   // prefix match 가장 긴 alias 로 fallback. 비례는 exact 먼저 시도라 영향 없음.
   const partyCache = new Map<string, string | null>();
   function partyOf(rawName: string): string | null {
     if (partyCache.has(rawName)) return partyCache.get(rawName)!;
+    // 1) override 강제 매핑 (alias 보다 우선) — exact 또는 prefix 매칭
+    for (const o of overrides) {
+      if (o.raw_name.length >= 3 && rawName.startsWith(o.raw_name)) {
+        partyCache.set(rawName, o.party_id);
+        return o.party_id;
+      }
+    }
+    // 2) exact alias 매칭
     let id = resolvePartyId(rawName, electionDate, aliases);
     if (id === null) {
-      // prefix match — 후보자명 시작과 일치하는 가장 긴 valid alias 찾기 (≥3자)
+      // 3) prefix match — 후보자명 시작과 일치하는 가장 긴 valid alias 찾기 (≥3자)
       let best: { len: number; partyId: string } | null = null;
       for (const a of aliases) {
         if (a.alias.length >= 3 && rawName.startsWith(a.alias)) {
