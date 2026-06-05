@@ -162,7 +162,7 @@ townCode 목록은 `selectbox_townCodeJson.json?electionId={electionId}&cityCode
 | **5.0 스키마** | drizzle 마이그레이션 + RLS 정책 + verify-schema 통과 | — | `pnpm verify:schema` 가 11개 테이블 확인 (기존 8 + 신규 3) |
 | **5.1 파서** | `parse-polling-stations.ts` + `lib/nec-html.ts` 확장 + 단위 테스트 | 5.0 | 실제 HTML fixture 4종(2025대선·2024총선비례·2022지선광역비례·2020총선비례) 각 3 케이스 PASS. 2024 총선 지역구(necCode=2)는 VCCP04 의 후보자명 처리 구조가 특수해 파서 확장 필요 — Phase 5.2 fetcher 작업 중 별도 fixture 수집·검증 |
 | **5.2 fetcher** | `fetch-polling-stations.ts` (동시성 5, 재시도 3, 6s 타임아웃, raw 캐시) | 5.1 | 2025 대선 단일 race 호출 → raw 디렉터리에 17 시·도 파일 생성 |
-| **5.3 ingest 검증** | `ingest-polling-stations.ts` + `2025-presidential` 단일 적재 | 5.2 | station 수 ≈ 14k ±10%; 매핑률 ≥95%; vote_totals 시·도 합 cross-check ±0.5% |
+| **5.3 ingest 검증** | `ingest-polling-stations.ts` + `2024-general-prop` 단일 적재 (2025 대선은 NEC 가 station 데이터 미공개 — Phase 5.2 발견사항) | 5.2 | station 수 ≈ 14k ±10%; 매핑률 ≥95%; vote_totals sigungu 합 cross-check ±0.5% |
 | **5.4 전체 파일럿** | 12 electionId 전부 적재 + 리포트 | 5.3 | Phase 5.3 검증 게이트 12 electionId 전부 통과 |
 
 각 phase 의 `writing-plans` 산출물은 본 spec 승인 후 별도 작성.
