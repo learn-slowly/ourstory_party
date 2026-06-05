@@ -81,14 +81,26 @@ export const pollingStations = pgTable(
     electionId: text("election_id").notNull().references(() => elections.id),
     sigunguCode: text("sigungu_code").notNull().references(() => regions.code),
     emdCode: text("emd_code").references(() => regions.code), // null 허용 (메타 행: 거소·관외·재외)
-    name: text("name").notNull(),                              // "제1투표소" / "관내사전투표" 등
+    name: text("name").notNull(),                              // "선거일투표" / "관내사전투표" / "제1투표소"(라이브) 등
     kind: text("kind", {
-      enum: ["station", "presub", "abs", "absentee", "overseas", "misc"],
+      // emd-level kinds (NEC 역대 archive 의 최저 단위):
+      //   "el_day"   — emd 단위 선거일 본투표 합계 ("선거일투표")
+      //   "presub"   — emd 단위 관내사전투표 합계
+      // 시·군·구 단위 메타 (특정 emd 귀속 불가):
+      //   "abs"      — 관외사전투표
+      //   "absentee" — 거소·선상투표
+      //   "overseas" — 재외투표
+      //   "misc"     — 잘못 투입·구분된 투표지 등
+      // 라이브 선거 전용 (NEC live 모듈 VCCP08 운영 기간에만 가능):
+      //   "station"  — 개별 투표소 ("제1투표소" 류). 역대 archive 에는 미존재
+      enum: ["el_day", "presub", "abs", "absentee", "overseas", "misc", "station"],
     }).notNull(),
     necTownCode: text("nec_town_code"),                        // NEC 시·군·구 코드 (디버깅용)
   },
   (t) => ({
-    uq: uniqueIndex("ps_uq").on(t.electionId, t.sigunguCode, t.name),
+    // 자연키에 emd_code 포함 — NEC 역대 archive 가 emd 단위 분해를 같은 name ("선거일투표" / "관내사전투표") 으로 반복하기 때문.
+    // emd_code NULL (top-level 메타 행: abs/absentee/overseas/misc) 은 Postgres 가 distinct 로 처리.
+    uq: uniqueIndex("ps_uq").on(t.electionId, t.sigunguCode, t.emdCode, t.name),
     emdIdx: index("ps_emd_idx").on(t.electionId, t.emdCode),
   }),
 );
@@ -121,9 +133,15 @@ export const pollingStationTotals = pgTable(
 ```
 
 **키 정책 메모**
-- 자연키 = `(election_id, sigungu_code, name)`. ourstory `elections` 가 이미 race 별로 분리되어 있어 race 정보는 `electionId` 에 내포 — 별도 race 컬럼 불필요.
-- 시계열 비교: 다른 선거의 station을 `(sigungu_code, name)` 으로 JOIN — best-effort. 매칭 안 되면 NULL/gap. renumber 명시 보정은 본 Phase에 없음.
-- `raw_name` 을 PK 에 포함 = 같은 station 안에서 정당명 중복(서로 다른 매핑 alias) 충돌 방지. partyId 는 별도 인덱스로 보강.
+- 자연키 = `(election_id, sigungu_code, emd_code, name)`. ourstory `elections` 가 이미 race 별로 분리되어 있어 race 정보는 `electionId` 에 내포 — 별도 race 컬럼 불필요.
+- emd_code 가 자연키에 포함되는 이유: NEC 역대 archive 가 한 sigungu 안 모든 emd 에 대해 동일한 name ("선거일투표" / "관내사전투표") 을 반복함. emd_code 없으면 sigungu 당 1행으로 collapse.
+- 시계열 비교: 다른 선거의 voting unit 을 `(sigungu_code, emd_code, name)` 으로 JOIN — emd 단위로 안정적 (행정구역 코드는 stable).
+- `raw_name` 을 PK 에 포함 = 같은 voting unit 안에서 정당명 중복(서로 다른 매핑 alias) 충돌 방지. partyId 는 별도 인덱스로 보강.
+
+**역대 vs 라이브 데이터 가용성**
+- NEC 역대 archive (VCCP04): emd-level 분해 (선거일·관내사전 + 시·군·구 단위 외부 메타) 만 제공. 개별 투표소 단위 데이터 **없음**.
+- NEC 라이브 모듈 (VCCP08, 선거일 ~ 수 주 이내): 투표구별(개별 투표소) row 제공. archive 로 이관 후 사라짐.
+- 본 Phase 의 적재 대상은 역대 archive — `kind="station"` 은 미래 라이브 선거 (2026 9회 지선 NEC 공개 후, 2027 대선 등) 적재 시에 사용. 현재는 dead enum value 로 보존.
 
 ## NEC 엔드포인트 매핑
 
@@ -162,7 +180,7 @@ townCode 목록은 `selectbox_townCodeJson.json?electionId={electionId}&cityCode
 | **5.0 스키마** | drizzle 마이그레이션 + RLS 정책 + verify-schema 통과 | — | `pnpm verify:schema` 가 11개 테이블 확인 (기존 8 + 신규 3) |
 | **5.1 파서** | `parse-polling-stations.ts` + `lib/nec-html.ts` 확장 + 단위 테스트 | 5.0 | 실제 HTML fixture 4종(2025대선·2024총선비례·2022지선광역비례·2020총선비례) 각 3 케이스 PASS. 2024 총선 지역구(necCode=2)는 VCCP04 의 후보자명 처리 구조가 특수해 파서 확장 필요 — Phase 5.2 fetcher 작업 중 별도 fixture 수집·검증 |
 | **5.2 fetcher** | `fetch-polling-stations.ts` (동시성 5, 재시도 3, 6s 타임아웃, raw 캐시) | 5.1 | 2025 대선 단일 race 호출 → raw 디렉터리에 17 시·도 파일 생성 |
-| **5.3 ingest 검증** | `ingest-polling-stations.ts` + `2024-general-prop` 단일 적재 (2025 대선은 NEC 가 station 데이터 미공개 — Phase 5.2 발견사항) | 5.2 | station 수 ≈ 14k ±10%; 매핑률 ≥95%; vote_totals sigungu 합 cross-check ±0.5% |
+| **5.3 ingest 검증** | `ingest-polling-stations.ts` + `2024-general-prop` 단일 적재 (2025 대선은 NEC 가 station 데이터 미공개 — Phase 5.2 발견사항) | 5.2 | emd 분해 수 ≈ 3,500 ±10% (전국 읍·면·동 단위 × `el_day`); 매핑률 ≥95%; vote_totals sigungu 합 = (el_day + presub + abs + absentee + overseas + misc) 합 ±0.5% |
 | **5.4 전체 파일럿** | 12 electionId 전부 적재 + 리포트 | 5.3 | Phase 5.3 검증 게이트 12 electionId 전부 통과 |
 
 각 phase 의 `writing-plans` 산출물은 본 spec 승인 후 별도 작성.
@@ -171,11 +189,11 @@ townCode 목록은 `selectbox_townCodeJson.json?electionId={electionId}&cityCode
 
 다음 전부 PASS 시 PoC 성공:
 
-1. **Station 수 sanity** — electionId 별 `count(*) WHERE kind='station'` 가 알려진 한국 투표소 수(약 14,000) ±10% 이내
+1. **emd 분해 sanity** — electionId 별 `count(*) WHERE kind='el_day'` 가 한국 읍·면·동 수(약 3,500) ±10% 이내
 2. **정당 매핑률** — `polling_station_votes` 의 `partyId IS NOT NULL` 비율 ≥95%
-3. **합산 cross-check** — electionId 별 `polling_station_votes` 정당별 합 = 기존 `vote_totals` 같은 electionId · 시·도 정당별 합 ±0.5%
+3. **합산 cross-check** — electionId 별 `polling_station_votes` 정당별 합 (전 kind 합) = 기존 `vote_totals` 같은 electionId · 시·군·구 정당별 합 ±0.5%
 4. **단위 테스트** — 신규 12개 이상 PASS (파서 4 fixture × 3 케이스)
-5. **레퍼런스 스팟체크** — 임의 5 투표소를 NEC 웹 페이지 직접 확인과 일치
+5. **레퍼런스 스팟체크** — 임의 5 emd 의 (el_day + presub) 합을 NEC 웹 페이지 직접 확인과 일치
 
 ## 오류 처리
 
