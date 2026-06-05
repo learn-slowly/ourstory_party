@@ -39,7 +39,7 @@ export function parseVccpAggregate(html: string): ParseResult {
   if (!firstBodyRow.length) return { kind: "no-data" };
 
   const firstCellText = firstBodyRow.find("td").first().text().trim();
-  if (firstCellText.includes("검색된 결과가 없습니다")) {
+  if (firstCellText.includes("검색된 결과가 없습니다") || firstCellText.includes("조회된 자료가 없습니다") || firstCellText.includes("무투표")) {
     return { kind: "no-data" };
   }
   if (firstCellText !== "합계") return { kind: "no-data" };
@@ -176,7 +176,7 @@ export function parseVccp08Stations(html: string): StationsParseResult {
   const firstBodyRow = $("table#table01 tbody tr").first();
   if (!firstBodyRow.length) return { kind: "no-data" };
   const firstCellText = firstBodyRow.find("td").first().text().trim();
-  if (firstCellText.includes("검색된 결과가 없습니다")) {
+  if (firstCellText.includes("검색된 결과가 없습니다") || firstCellText.includes("조회된 자료가 없습니다") || firstCellText.includes("무투표")) {
     return { kind: "no-data" };
   }
 
@@ -325,7 +325,7 @@ export function parseVccp04District(html: string): DistrictParseResult {
   const firstBodyRow = $("table#table01 tbody tr").first();
   if (!firstBodyRow.length) return { kind: "no-data" };
   const firstCellText = firstBodyRow.find("td").first().text().trim();
-  if (firstCellText.includes("검색된 결과가 없습니다")) {
+  if (firstCellText.includes("검색된 결과가 없습니다") || firstCellText.includes("조회된 자료가 없습니다") || firstCellText.includes("무투표")) {
     return { kind: "no-data" };
   }
 

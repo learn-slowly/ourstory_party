@@ -79,16 +79,14 @@ async function main() {
   // election.date 는 drizzle date 타입이므로 문자열로 변환
   const electionDate = String(election.date);
 
-  // 지역구는 후보자명 ("더불어민주당갈상돈") 형식이라 exact alias 매칭 실패.
-  // prefix match (가장 긴 매칭 alias) 로 정당 추출. 비례·대선 등은 exact 만으로 충분.
-  const isDistrict = election.necCode === "2" || election.necCode === "6";
-
-  // resolvePartyId 캐시 (같은 raw name 반복 호출 회피)
+  // resolvePartyId 캐시 (같은 raw name 반복 호출 회피).
+  // 대선·지역구는 raw_name 이 후보자명 형식 ("정의당심상정") 이라 exact 매칭 실패 →
+  // prefix match 가장 긴 alias 로 fallback. 비례는 exact 먼저 시도라 영향 없음.
   const partyCache = new Map<string, string | null>();
   function partyOf(rawName: string): string | null {
     if (partyCache.has(rawName)) return partyCache.get(rawName)!;
     let id = resolvePartyId(rawName, electionDate, aliases);
-    if (id === null && isDistrict) {
+    if (id === null) {
       // prefix match — 후보자명 시작과 일치하는 가장 긴 valid alias 찾기 (≥3자)
       let best: { len: number; partyId: string } | null = null;
       for (const a of aliases) {

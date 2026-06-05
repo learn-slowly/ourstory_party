@@ -26,8 +26,10 @@ function planRace(necCode: string, isLive: boolean): {
   endpoint: "VCCP08" | "VCCP04";
   electionType: string;
 } {
+  // 라이브 모드: 대선·광역단체장·교육감(1·3·11) 은 시·도 단위만 제공.
+  // 역대(historical) 모드: NEC archive 가 모든 race 를 sigungu 단위로 보관 → sigungu 호출.
   const sigunguOnly = new Set(["1", "3", "11"]);
-  const sigunguLevel = !sigunguOnly.has(necCode);
+  const sigunguLevel = isLive ? !sigunguOnly.has(necCode) : true;
   // necCode → electionType
   const typeMap: Record<string, string> = {
     "1": "1", // 대통령
