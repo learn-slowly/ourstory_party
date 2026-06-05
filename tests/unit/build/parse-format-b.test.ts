@@ -19,4 +19,15 @@ describe("parseFormatB — 2020 영암", () => {
     expect(stations.length).toBeGreaterThan(0);
     expect(stations[0].emdName).toBeTruthy();
   });
+  it("kind 분포 — el_day · presub · abs · overseas 등 포함", () => {
+    const r = parseFormatB(fixture, { isProportional: false });
+    const kinds = new Set(r.rows.map((x) => x.kind));
+    expect(kinds.has("el_day")).toBe(true);
+    expect(kinds.has("presub")).toBe(true);
+  });
+  it("각 station 의 parties 배열 길이 == partyNames.length", () => {
+    const r = parseFormatB(fixture, { isProportional: false });
+    const stations = r.rows.filter((x) => x.kind === "el_day");
+    for (const s of stations) expect(s.parties.length).toBe(r.partyNames.length);
+  });
 });
