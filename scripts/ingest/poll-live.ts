@@ -1,11 +1,5 @@
 import { sql } from "../../src/lib/db-admin";
 import { runOneElection } from "./ingest-election";
-import { existsSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const DONE_FLAG = path.join(HERE, "..", "..", "data", "raw", "LIVE_DONE");
 
 const DEFAULT_IDS = [
   "2026-local-governor",
@@ -18,10 +12,6 @@ const DEFAULT_IDS = [
 ];
 
 async function main() {
-  if (existsSync(DONE_FLAG)) {
-    console.log("LIVE_DONE flag — skip");
-    process.exit(0);
-  }
   const idsEnv = process.env.LIVE_ELECTION_IDS;
   const ids = idsEnv
     ? idsEnv
@@ -55,29 +45,15 @@ async function main() {
     }
   }
 
-  // 전체가 미공개 = 데이터 공개 전. 정상 종료(다음 cron 대기).
+  // 전체가 미공개 = data.go.kr 공개 전. 정상 종료.
   if (failed.length === 0 && noData.length === ids.length) {
-    console.log(
-      `\n전부 미공개 — data.go.kr 공개 전. 다음 cron 대기. (${noData.length}개)`
-    );
+    console.log(`\n전부 미공개 — data.go.kr 공개 전 (${noData.length}개)`);
     await sql.end();
     process.exit(0);
   }
 
-  // 모든 fetch 성공 + 평균 진행률 99.5% 이상 → DONE 플래그
   if (failed.length === 0 && noData.length === 0) {
-    const rows = await sql<{ avg: number | null }[]>`
-      SELECT AVG(progress_pct)::float AS avg FROM region_totals
-      WHERE election_id = ANY(${ids}::text[]) AND progress_pct IS NOT NULL`;
-    const avg = Number(rows[0]?.avg ?? 0);
-    if (avg >= 99.5) {
-      writeFileSync(DONE_FLAG, new Date().toISOString());
-      console.log(
-        `✓ 모든 elections 평균 진행률 ${avg.toFixed(2)}% — LIVE_DONE 생성`
-      );
-    } else {
-      console.log(`진행 중 — 평균 진행률 ${avg.toFixed(2)}%`);
-    }
+    console.log(`\n✓ 모든 elections 적재 완료 (${ids.length}개)`);
   } else if (failed.length > 0) {
     console.log(`\n실패: ${failed.join(", ")}`);
     if (noData.length > 0) console.log(`미공개: ${noData.join(", ")}`);
