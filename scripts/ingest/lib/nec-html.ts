@@ -193,6 +193,24 @@ export function parseVccp08Stations(html: string): StationsParseResult {
 
   const num = (s: string) => Number(s.replace(/,/g, "")) || 0;
 
+  // file-level offset detection — VCCP04 단일 선거구 (선거구명 컬럼 포함, 종로구 등) 는 +1.
+  // 첫 tbody 행의 cells[0] 이 "합계" 가 아니고 META 라벨도 아니면 (= sigungu 이름) → file 전체 offset=1.
+  // 일반 비례 VCCP08/VCCP04 (수원시 등 다선거구 분리된 시·도) 는 cells[0]="합계" → offset=0.
+  let fileOffset = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const firstTr: any = $("table#table01 tbody tr").first();
+  if (firstTr.length) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const firstCells = firstTr.find("td").map((_i: number, td: any) => $(td).text().trim()).get() as string[];
+    if (firstCells.length >= minCols + 1) {
+      const c0first = firstCells[0];
+      // sigungu name 으로 보이는 경우 — non-blank, "합계" 아님, META 아님
+      if (c0first && c0first !== "합계" && !META_LABELS.has(c0first)) {
+        fileOffset = 1;
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   $("table#table01 tbody tr").each((_: number, tr: any) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -200,15 +218,11 @@ export function parseVccp08Stations(html: string): StationsParseResult {
 
     if (cells.length < minCols) return;
 
-    // VCCP04 중 선거구명 열이 추가된 경우: 첫 셀이 선거구명이고 두 번째가 읍면동명,
-    // 세 번째가 구분("합계"/"계" 등)이 되어 컬럼 오프셋이 +1.
-    // 단순 휴리스틱: cells[0]이 메타레이블도, emd 이름도 아닌 "시·군구 명"이면 offset 적용.
-    // 여기서는 일반 구조(offset=0)와 선거구명 포함 구조(offset=1)를 탐지.
-    let offset = 0;
-    // 선거구명 열 감지: cells[1] 이 emd 이름 혹은 메타레이블이고 cells[0] 이 별개 텍스트
-    // 간단히: cells[1]이 비어있지 않고 cells[2]가 숫자이면 일반 구조,
-    //         cells[1]이 비어있지 않고 cells[2]가 숫자가 아니면 선거구명 포함 구조
-    if (cells[1] && isNaN(Number(cells[2].replace(/,/g, ""))) && cells[2]) {
+    // row-level offset 보강 — 일부 파일에서 행마다 selectively offset 적용 필요한 경우 보조 휴리스틱.
+    // 기본은 file-level offset 사용, 단 cells[1]==="" 이고 cells[0] 가 데이터 라벨이면 그 row 는 offset=0 (기존 휴리스틱)
+    let offset = fileOffset;
+    if (fileOffset === 0 && cells[1] && cells[2] && isNaN(Number(cells[2].replace(/,/g, "")))) {
+      // 다선거구 파일의 emd row — cells[1]=emd, cells[2]=label, offset=1 임시
       offset = 1;
     }
 
@@ -221,7 +235,8 @@ export function parseVccp08Stations(html: string): StationsParseResult {
     if (cells.length < partyStartIdx + partyNames.length + 3) return;
 
     // "합계" 행은 vote_totals 와 중복이므로 제외
-    if (c0 === "합계") return;
+    // "합계" 가 c0 또는 c1 에 위치하는 경우 모두 skip (단일 선거구 VCCP04 의 c0=sigungu·c1=합계 형식 포함).
+    if (c0 === "합계" || c1 === "합계") return;
 
     // emd 블록 시작 감지 — c0 가 emd 이름, c1 이 "소계"(VCCP08) 또는 "계"(VCCP04)
     if (c0 && (c1 === "소계" || c1 === "계")) {
