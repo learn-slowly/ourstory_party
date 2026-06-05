@@ -45,3 +45,6 @@ data/seed/legaldong-source.txt
 
 # data.go.kr raw 캐시 (재실행 시 재생성)
 /data/raw/
+
+# Claude Code 워크트리·로컬 설정
+/.claude/
