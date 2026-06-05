@@ -284,3 +284,148 @@ export function parseVccp08Stations(html: string): StationsParseResult {
   if (rows.length === 0) return { kind: "no-data" };
   return { kind: "ok", rows, partyNames };
 }
+
+// ─── 지역구(VCCP04 + 후보자명 in tbody) 행 파서 ─────────────────────────────
+
+/**
+ * 한 선거구(예: "진주시갑") 내부의 한 행 (투표소/메타).
+ * 같은 시·군·구 안에 여러 선거구가 있을 수 있어, district 필드로 그룹화.
+ */
+export interface ParsedDistrictRow {
+  district: string;             // "진주시갑"
+  emdName: string | null;
+  name: string;                 // "문산읍제1투" / "관내사전투표" / "거소투표" 등
+  kind: ParsedStationRow["kind"];
+  totalVoters: number;
+  totalVotes: number;
+  validVotes: number;
+  invalidVotes: number;
+  candidates: ParsedParty[];    // 이 district 의 후보 명단으로 매핑된 득표
+}
+
+export type DistrictParseResult =
+  | { kind: "ok"; rows: ParsedDistrictRow[] }
+  | { kind: "no-data" };
+
+/**
+ * 지역구(VCCP04 + electionCode=2|4|5|6) HTML 파서.
+ *
+ * 후보자명은 tbody 첫 행에 (각 선거구마다 다르게) 나타남.
+ * 한 시·군·구 응답 안에 여러 선거구가 순차로 나오며, 각 선거구는
+ *   [후보자명 헤더 행] → [합계 행] → [거소·관외·국외 등 메타] → [emd 행들]
+ * 패턴을 반복함.
+ */
+export function parseVccp04District(html: string): DistrictParseResult {
+  const $ = cheerio.load(html);
+
+  const firstBodyRow = $("table#table01 tbody tr").first();
+  if (!firstBodyRow.length) return { kind: "no-data" };
+  const firstCellText = firstBodyRow.find("td").first().text().trim();
+  if (firstCellText.includes("검색된 결과가 없습니다")) {
+    return { kind: "no-data" };
+  }
+
+  const num = (s: string) => Number(s.replace(/,/g, "")) || 0;
+  const rows: ParsedDistrictRow[] = [];
+  let currentDistrict: string | null = null;
+  let currentEmd: string | null = null;
+  let currentCandidates: string[] = [];
+  // 컬럼 인덱스: 0:선거구명 1:읍면동명 2:구분 3:선거인수 4:투표수 5..(5+N-1):후보자 (5+N):계 (5+N+1):무효 (5+N+2):기권
+  // 후보자 컬럼의 수 N 은 max colspan 으로 고정(NEC 가 빈 셀 패딩). 첫 후보자 행에서 자동 감지.
+
+  $("table#table01 tbody tr").each((_, tr) => {
+    const cells = $(tr)
+      .find("td")
+      .map((_, td) => $(td).text().trim())
+      .get();
+    if (cells.length < 8) return; // 최소 컬럼 수 미만 → skip
+
+    const c0 = cells[0]; // 선거구명 (전환 시에만)
+    const c1 = cells[1]; // 읍면동명
+    const c2 = cells[2]; // 구분
+    const totalVotersCell = cells[3];
+    const totalVotesCell = cells[4];
+
+    // 후보자 헤더 행 — 분모 셀이 모두 비고, 중간 셀에 후보자명
+    const isCandHeader =
+      c0 === "" && c1 === "" && c2 === "" && totalVotersCell === "" && totalVotesCell === "";
+    if (isCandHeader) {
+      // 후보자명 추출 — cells[5] 부터, "계" 라벨 직전까지
+      const newCands: string[] = [];
+      for (let i = 5; i < cells.length; i++) {
+        const v = cells[i];
+        if (v === "계") break;
+        if (v) newCands.push(v);
+      }
+      if (newCands.length > 0) currentCandidates = newCands;
+      currentEmd = null;
+      return;
+    }
+
+    // 선거구 전환 — 합계 행 (c0=district, c1=합계)
+    if (c0 && c1 === "합계") {
+      currentDistrict = c0;
+      currentEmd = null;
+      return; // 합계는 vote_totals 와 중복이므로 저장 안 함
+    }
+
+    if (!currentDistrict || currentCandidates.length === 0) {
+      // 후보자·선거구 컨텍스트 미정 — skip
+      return;
+    }
+
+    // emd 블록 진입 — c1 가 emd 이름, c2 가 "계"
+    if (c1 && c2 === "계" && !META_LABELS.has(c1)) {
+      currentEmd = c1;
+      return; // emd 소계도 저장 안 함
+    }
+
+    // row 분류
+    let kind: ParsedStationRow["kind"];
+    let emdName: string | null;
+    let displayName: string;
+
+    const topMeta = META_LABELS.get(c1); // 거소투표 / 관외사전 / 국외부재자 등 (선거구 단위 메타)
+    const perEmdMeta = META_LABELS.get(c2); // 관내사전 (emd 안)
+
+    if (topMeta && !currentEmd) {
+      kind = topMeta;
+      emdName = null;
+      displayName = c1;
+    } else if (perEmdMeta) {
+      kind = perEmdMeta;
+      emdName = currentEmd;
+      displayName = c2;
+    } else if (c2) {
+      kind = "station";
+      emdName = currentEmd;
+      displayName = c2;
+    } else {
+      return;
+    }
+
+    // 후보자별 득표 — cells[5 .. 5 + N]
+    const candEnd = 5 + currentCandidates.length;
+    if (cells.length < candEnd + 3) return;
+    const validVotes = num(cells[candEnd]);     // "계" 컬럼
+    const invalidVotes = num(cells[candEnd + 1]);
+    // cells[candEnd + 2] = 기권자수 (보관 안 함)
+
+    rows.push({
+      district: currentDistrict,
+      emdName,
+      name: displayName,
+      kind,
+      totalVoters: num(totalVotersCell),
+      totalVotes: num(totalVotesCell),
+      validVotes,
+      invalidVotes,
+      candidates: currentCandidates.map((name, i) => ({
+        name,
+        votes: num(cells[5 + i]),
+      })),
+    });
+  });
+
+  return rows.length > 0 ? { kind: "ok", rows } : { kind: "no-data" };
+}

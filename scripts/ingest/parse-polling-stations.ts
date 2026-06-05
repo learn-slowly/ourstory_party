@@ -1,4 +1,4 @@
-// raw HTML 디렉터리(`data/raw/polling-stations/{electionId}-{cityCode}-{townCode}.html`)
+// raw HTML 디렉터리(`data/raw/polling-stations/{electionId}/{necElectionId}-{cityCode}-{townCode}.html`)
 // → 처리된 JSON (`data/processed/polling-stations/{electionId}.json`)
 //
 // 실행: pnpm tsx scripts/ingest/parse-polling-stations.ts <electionId>
@@ -15,7 +15,7 @@ import {
 } from "./lib/nec-html";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RAW_DIR = path.join(HERE, "..", "..", "data", "raw", "polling-stations");
+const RAW_BASE = path.join(HERE, "..", "..", "data", "raw", "polling-stations");
 const OUT_DIR = path.join(HERE, "..", "..", "data", "processed", "polling-stations");
 
 interface ParsedFile {
@@ -34,17 +34,17 @@ interface ElectionBundle {
   noDataFiles: number;
 }
 
-function parseFilename(name: string, electionId: string): {
+function parseFilename(name: string): {
   cityCode: string;
   townCode: string;
 } | null {
-  // 패턴: {electionId}-{cityCode}-{townCode}.html
-  const prefix = `${electionId}-`;
-  if (!name.startsWith(prefix) || !name.endsWith(".html")) return null;
-  const middle = name.slice(prefix.length, -".html".length);
-  const parts = middle.split("-");
-  if (parts.length !== 2) return null;
-  return { cityCode: parts[0], townCode: parts[1] };
+  // 패턴: {necElectionId}-{cityCode}-{townCode}.html (fetcher 가 생성)
+  if (!name.endsWith(".html")) return null;
+  const stem = name.slice(0, -".html".length);
+  // necElectionId 는 10자리 숫자
+  const m = stem.match(/^\d{10}-(\d{4})-(\w+)$/);
+  if (!m) return null;
+  return { cityCode: m[1], townCode: m[2] };
 }
 
 async function main() {
@@ -54,6 +54,9 @@ async function main() {
     process.exit(2);
   }
 
+  // 선거별 서브디렉터리: data/raw/polling-stations/{electionId}/
+  const RAW_DIR = path.join(RAW_BASE, electionId);
+
   if (!existsSync(RAW_DIR)) {
     console.error(`raw dir 없음: ${RAW_DIR}`);
     console.error("Phase 5.2 fetcher 를 먼저 실행해야 함.");
@@ -62,7 +65,7 @@ async function main() {
 
   const all = await readdir(RAW_DIR);
   const targets = all
-    .map((n) => ({ name: n, meta: parseFilename(n, electionId) }))
+    .map((n) => ({ name: n, meta: parseFilename(n) }))
     .filter((x) => x.meta !== null) as { name: string; meta: { cityCode: string; townCode: string } }[];
 
   if (targets.length === 0) {
