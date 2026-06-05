@@ -21,7 +21,7 @@ const RAW_BASE = path.join(HERE, "..", "..", "data", "raw", "polling-stations");
 const CONCURRENCY = 5;
 
 // race 종류 → (시·도 단위 only / 시·군·구까지 / VCCP08 vs VCCP04)
-function planRace(necCode: string): {
+function planRace(necCode: string, isLive: boolean): {
   sigunguLevel: boolean;
   endpoint: "VCCP08" | "VCCP04";
   electionType: string;
@@ -36,9 +36,15 @@ function planRace(necCode: string): {
     "7": "2", // 국회 비례
   };
   const electionType = typeMap[necCode] ?? "4";
-  // 지역구(2)·기초의원지역구(6) 는 VCCP04 권장 (후보자명 행 포함). 그 외 VCCP08.
-  const endpoint: "VCCP08" | "VCCP04" =
-    (necCode === "2" || necCode === "6") ? "VCCP04" : "VCCP08";
+  // 라이브 선거: 지역구(2)·기초의원지역구(6) 는 VCCP04 권장. 그 외 VCCP08.
+  // 역대 선거: 지역구(2)·기초의원지역구(6)·비례(7·8·9) 모두 VCCP04 (정당별 득표 열 포함).
+  let endpoint: "VCCP08" | "VCCP04";
+  if (isLive) {
+    endpoint = (necCode === "2" || necCode === "6") ? "VCCP04" : "VCCP08";
+  } else {
+    // 역대: 비례(7·8·9), 지역구(2·6) 등 모든 코드에서 VCCP04 가 정당 득표 열 제공
+    endpoint = "VCCP04";
+  }
   return { sigunguLevel, endpoint, electionType };
 }
 
@@ -77,8 +83,11 @@ async function main() {
   }
 
   const dateYmd = String(election.date).replace(/-/g, "");
-  const plan = planRace(election.necCode);
-  const isLive = election.necElectionId !== "0000000000";
+  // 진행 중인 선거(당일 또는 미래)는 라이브 엔드포인트, 과거 선거는 역대(0000000000) 엔드포인트
+  const electionDateStr = String(election.date); // "YYYY-MM-DD"
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isLive = electionDateStr >= todayStr;
+  const plan = planRace(election.necCode, isLive);
 
   console.log(
     `▶ ${electionId} necCode=${election.necCode} ` +

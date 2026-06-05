@@ -18,16 +18,20 @@ export const CITY_CODES: CityCode[] = [
   { code: "2900", name: "광주광역시" },
   { code: "3000", name: "대전광역시" },
   { code: "3100", name: "울산광역시" },
-  { code: "3600", name: "세종특별자치시" },
+  // 주의: NEC 내부 cityCode 는 행안부 법정동코드 시·도 prefix 와 다름.
+  // 특히 세종(5100)·강원특자도(5200)·전북특자도(5300)·제주특자도(4900) 는
+  // NEC가 별도 코드 부여 (특별자치도 승격·세종 신설로 인한 재할당).
+  // 실제 유효성 검증: NEC selectbox_townCodeJson.json endpoint 응답 비교.
+  { code: "5100", name: "세종특별자치시" },
   { code: "4100", name: "경기도" },
-  { code: "4200", name: "강원특별자치도" },
+  { code: "5200", name: "강원특별자치도" },
   { code: "4300", name: "충청북도" },
   { code: "4400", name: "충청남도" },
-  { code: "4500", name: "전북특별자치도" },
+  { code: "5300", name: "전북특별자치도" },
   { code: "4600", name: "전라남도" },
   { code: "4700", name: "경상북도" },
   { code: "4800", name: "경상남도" },
-  { code: "5000", name: "제주특별자치도" },
+  { code: "4900", name: "제주특별자치도" },
 ];
 
 export interface TownCode {

@@ -39,15 +39,16 @@ describe("parseVccp04District — 2024 진주 지역구", () => {
     expect(first).not.toBe(second);
   });
 
-  it("선거구 station 행이 다수 + emdName·district 모두 채워짐", async () => {
+  it("선거구 el_day 행이 다수 + emdName·district 모두 채워짐", async () => {
     const html = await readFile(
       path.join(FX, "nec-vccp04-2024-jinju-district.html"),
       "utf-8",
     );
     const r = parseVccp04District(html);
     if (r.kind !== "ok") throw new Error("expected ok");
-    const stations = r.rows.filter((x) => x.kind === "station");
-    expect(stations.length).toBeGreaterThan(10);
-    expect(stations.every((s) => !!s.district && !!s.emdName)).toBe(true);
+    // VCCP04 지역구: "선거일투표" → el_day
+    const elDays = r.rows.filter((x) => x.kind === "el_day");
+    expect(elDays.length).toBeGreaterThan(10);
+    expect(elDays.every((s) => !!s.district && !!s.emdName)).toBe(true);
   });
 });

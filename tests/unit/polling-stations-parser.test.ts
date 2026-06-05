@@ -55,16 +55,17 @@ describe("parseVccp08Stations — 2024 진주 총선 비례", () => {
     expect(r.partyNames.length).toBe(38);
   });
 
-  it("station 행 다수 + 관내사전(presub) 행이 emd 별로 존재", async () => {
+  it("el_day 행 다수 + 관내사전(presub) 행이 emd 별로 존재", async () => {
     const html = await load("nec-vccp08-2024-jinju-generalprop.html");
     const r = parseVccp08Stations(html);
     if (r.kind !== "ok") throw new Error("expected ok");
-    const stations = r.rows.filter((x) => x.kind === "station");
+    // VCCP04 역대 archive: "선거일투표" → el_day, "관내사전투표" → presub
+    const elDays = r.rows.filter((x) => x.kind === "el_day");
     const presubs = r.rows.filter((x) => x.kind === "presub");
-    expect(stations.length).toBeGreaterThan(10);
+    expect(elDays.length).toBeGreaterThan(10);
     expect(presubs.length).toBeGreaterThan(5);
-    // station 의 emdName 은 비어있지 않아야 함
-    expect(stations.every((s) => !!s.emdName)).toBe(true);
+    // el_day 의 emdName 은 비어있지 않아야 함
+    expect(elDays.every((s) => !!s.emdName)).toBe(true);
   });
 
   it("정당 득표 셀 수 = partyNames 수, 모두 numeric", async () => {
@@ -87,14 +88,15 @@ describe("parseVccp08Stations — 2022 진주 광역비례", () => {
     expect(r.partyNames.length).toBe(6);
   });
 
-  it("emd 컨텍스트 추적: station 행의 emdName 이 직전 소계 행의 emd 와 일치", async () => {
+  it("emd 컨텍스트 추적: el_day 행의 emdName 이 직전 소계 행의 emd 와 일치", async () => {
     const html = await load("nec-vccp08-2022-jinju-localprop.html");
     const r = parseVccp08Stations(html);
     if (r.kind !== "ok") throw new Error("expected ok");
-    const stations = r.rows.filter((x) => x.kind === "station");
-    expect(stations.length).toBeGreaterThan(0);
-    // 적어도 두 개 이상의 다른 emdName 이 있어야 함 (여러 동에 걸쳐 station 분포)
-    const emds = new Set(stations.map((s) => s.emdName));
+    // VCCP04 역대 archive: "선거일투표" → el_day
+    const elDays = r.rows.filter((x) => x.kind === "el_day");
+    expect(elDays.length).toBeGreaterThan(0);
+    // 적어도 두 개 이상의 다른 emdName 이 있어야 함 (여러 동에 걸쳐 el_day 분포)
+    const emds = new Set(elDays.map((s) => s.emdName));
     expect(emds.size).toBeGreaterThan(1);
   });
 
@@ -131,7 +133,8 @@ describe("parseVccp08Stations — 2020 진주 총선 비례", () => {
     const html = await load("nec-vccp08-2020-jinju-generalprop.html");
     const r = parseVccp08Stations(html);
     if (r.kind !== "ok") throw new Error("expected ok");
-    const KINDS = new Set(["station", "presub", "abs", "absentee", "overseas", "misc"]);
+    // el_day 추가 (VCCP04 "선거일투표" 행)
+    const KINDS = new Set(["el_day", "station", "presub", "abs", "absentee", "overseas", "misc"]);
     for (const row of r.rows) {
       expect(KINDS.has(row.kind)).toBe(true);
     }

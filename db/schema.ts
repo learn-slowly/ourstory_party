@@ -117,7 +117,7 @@ export const electionPartyOverrides = pgTable(
   (t) => ({ pk: primaryKey({ columns: [t.electionId, t.rawName] }) }),
 );
 
-// 투표소(NEC 용어 "투표구") — 한 election 안에서 sigungu 별로 유일한 name
+// 투표소(NEC 용어 "투표구") — 자연키: (election_id, sigungu_code, emd_code, name)
 export const pollingStations = pgTable(
   "polling_stations",
   {
@@ -127,12 +127,22 @@ export const pollingStations = pgTable(
     emdCode: text("emd_code").references(() => regions.code),
     name: text("name").notNull(),
     kind: text("kind", {
-      enum: ["station", "presub", "abs", "absentee", "overseas", "misc"],
+      // emd-level (역대 archive 의 최저 단위):
+      //   "el_day"   — emd 단위 선거일 본투표 합 ("선거일투표")
+      //   "presub"   — emd 단위 관내사전투표 합
+      // 시·군·구 단위 메타 (특정 emd 귀속 불가):
+      //   "abs"      — 관외사전투표
+      //   "absentee" — 거소·선상투표
+      //   "overseas" — 재외투표
+      //   "misc"     — 잘못 투입·구분된 투표지 등
+      // 라이브 선거 전용 (NEC live 모듈 VCCP08 운영 기간에만):
+      //   "station"  — 개별 투표소 ("제1투표소" 류). 역대 archive 에는 미존재
+      enum: ["el_day", "presub", "abs", "absentee", "overseas", "misc", "station"],
     }).notNull(),
     necTownCode: text("nec_town_code"),
   },
   (t) => ({
-    uq: uniqueIndex("ps_uq").on(t.electionId, t.sigunguCode, t.name),
+    uq: uniqueIndex("ps_uq").on(t.electionId, t.sigunguCode, t.emdCode, t.name),
     emdIdx: index("ps_emd_idx").on(t.electionId, t.emdCode),
   }),
 );

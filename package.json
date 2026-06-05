@@ -24,6 +24,7 @@
     "ingest:poll-live": "dotenv -e .env.local -- tsx scripts/ingest/poll-live.ts",
     "ingest:fetch-polling-stations": "dotenv -e .env.local -- tsx scripts/ingest/fetch-polling-stations.ts",
     "ingest:parse-polling-stations": "dotenv -e .env.local -- tsx scripts/ingest/parse-polling-stations.ts",
+    "ingest:polling-stations": "dotenv -e .env.local -- tsx scripts/ingest/ingest-polling-stations.ts",
     "ingest:validate": "dotenv -e .env.local -- tsx scripts/ingest/ingest-pilot.ts --dry-run",
     "verify:schema": "dotenv -e .env.local -- tsx scripts/verify-schema.ts",
     "db:rls": "dotenv -e .env.local -- tsx scripts/apply-rls.ts"

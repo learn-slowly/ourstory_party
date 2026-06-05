@@ -106,6 +106,8 @@ const META_LABELS = new Map<string, ParsedStationRow["kind"]>([
   // 잘못 투입·구분된 투표지
   ["잘못 투입·구분된 투표지", "misc"],
   ["잘못 투입ㆍ구분된 투표지", "misc"],
+  // emd 단위 선거일 본투표 — VCCP04 archive 가 (관내사전 + 선거일) 분리해서 제공
+  ["선거일투표", "el_day"],
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +139,7 @@ function extractPartyNames($: any): string[] {
 export interface ParsedStationRow {
   emdName: string | null;
   name: string;
-  kind: "station" | "presub" | "abs" | "absentee" | "overseas" | "misc";
+  kind: "el_day" | "station" | "presub" | "abs" | "absentee" | "overseas" | "misc";
   totalVoters: number;
   totalVotes: number;
   validVotes: number;

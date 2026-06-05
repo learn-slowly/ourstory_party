@@ -30,7 +30,7 @@ interface ElectionBundle {
   files: ParsedFile[];
   // 합산 통계 — 디버깅·검증용
   totalRows: number;
-  stationCount: number;
+  emdBreakdownCount: number;  // el_day(emd 선거일) 행 수 — 적재된 emd 수 추정 지표
   noDataFiles: number;
 }
 
@@ -77,7 +77,7 @@ async function main() {
     electionId,
     files: [],
     totalRows: 0,
-    stationCount: 0,
+    emdBreakdownCount: 0,
     noDataFiles: 0,
   };
 
@@ -95,7 +95,8 @@ async function main() {
       rows: r.rows,
     });
     bundle.totalRows += r.rows.length;
-    bundle.stationCount += r.rows.filter((x) => x.kind === "station").length;
+    // el_day(emd 선거일) 행 수 — 적재된 emd 수 추정 지표
+    bundle.emdBreakdownCount += r.rows.filter((x) => x.kind === "el_day").length;
   }
 
   if (!existsSync(OUT_DIR)) await mkdir(OUT_DIR, { recursive: true });
@@ -105,7 +106,7 @@ async function main() {
   console.log(`✓ ${outPath}`);
   console.log(
     `  files=${bundle.files.length} (no-data=${bundle.noDataFiles}) ` +
-    `rows=${bundle.totalRows} stations=${bundle.stationCount}`,
+    `rows=${bundle.totalRows} emd=${bundle.emdBreakdownCount}`,
   );
 }
 

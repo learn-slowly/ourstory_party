@@ -22,6 +22,13 @@
       "when": 1780627530384,
       "tag": "0002_abandoned_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780638005131,
+      "tag": "0003_curious_red_ghost",
+      "breakpoints": true
     }
   ]
 }
