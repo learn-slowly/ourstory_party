@@ -1,8 +1,6 @@
 name: poll-live
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       election_ids:
