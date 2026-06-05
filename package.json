@@ -28,7 +28,9 @@
     "ingest:validate": "dotenv -e .env.local -- tsx scripts/ingest/ingest-pilot.ts --dry-run",
     "verify:schema": "dotenv -e .env.local -- tsx scripts/verify-schema.ts",
     "db:rls": "dotenv -e .env.local -- tsx scripts/apply-rls.ts",
-    "build:parse": "tsx scripts/build/parse-nec-xlsx.ts"
+    "build:parse": "tsx scripts/build/parse-nec-xlsx.ts",
+    "build:static": "tsx scripts/build/build-static.ts",
+    "build:all": "pnpm build:parse && pnpm build:static"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

@@ -52,3 +52,7 @@ data/processed/polling-stations/
 
 # Claude Code 워크트리·로컬 설정
 /.claude/
+
+# 정적 빌드 산출물 (재실행 시 재생성)
+data/parsed/
+public/data/static/
