@@ -1,6 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db } from "./db";
-import { elections, parties, regions, regionTotals, voteTotals } from "../../db/schema";
+import { db, sql } from "./db";
+import {
+  elections,
+  parties,
+  regions,
+  regionTotals,
+  voteTotals,
+  pollingStations,
+  pollingStationVotes,
+} from "../../db/schema";
 import type { HomeState } from "./url-state";
 
 export interface ElectionMeta {
@@ -274,4 +282,335 @@ export async function getLiveElectionOptions(limit = 12): Promise<{ id: string; 
     .where(inArray(elections.id, ingestedIds))
     .orderBy(elections.date);
   return metas.reverse().slice(0, limit).map((m) => ({ id: m.id, name: m.name, date: String(m.date) }));
+}
+
+// ─── /region/[code] 페이지용 query 함수들 ─────────────────────────────────
+
+type RegionRow = typeof regions.$inferSelect;
+
+export interface RegionContext {
+  region: RegionRow;
+  ancestors: RegionRow[]; // [sido] for sigungu, [sido, sigungu] for emd
+  children: RegionRow[];
+  level: "sido" | "sigungu" | "emd";
+}
+
+/**
+ * region.code 로 region·level·ancestors·children 한 번에 조회.
+ * code 가 regions 에 없으면 null.
+ */
+export async function getRegionContext(code: string): Promise<RegionContext | null> {
+  const [region] = await db.select().from(regions).where(eq(regions.code, code)).limit(1);
+  if (!region) return null;
+
+  // 현재 depth ≤ 2 (sido → sigungu → emd) 가정. 깊어지면 재귀 CTE 검토.
+  // 데이터 이상으로 self-referencing 순환 발생 시 visited Set 이 무한 루프 방어.
+  const ancestors: RegionRow[] = [];
+  const visited = new Set<string>([region.code]);
+  let cur: RegionRow = region;
+  while (cur.parentCode) {
+    if (visited.has(cur.parentCode)) break;
+    visited.add(cur.parentCode);
+    const [parent] = await db.select().from(regions).where(eq(regions.code, cur.parentCode)).limit(1);
+    if (!parent) break;
+    ancestors.unshift(parent);
+    cur = parent;
+  }
+
+  const children = await db.select().from(regions).where(eq(regions.parentCode, code));
+
+  return {
+    region,
+    ancestors,
+    children,
+    level: region.level,
+  };
+}
+
+export interface RegionDistRow {
+  partyId: string;
+  partyName: string;
+  color: string;
+  votes: number;
+  share: number;        // 0~1
+  prevShare: number | null; // 직전 동일 type 선거 비교, 없으면 null
+}
+
+export interface RegionDistribution {
+  rows: RegionDistRow[];
+  totalVotes: number;
+  raceKind: "party" | "candidate";
+}
+
+export async function getRegionDistribution(
+  electionId: string,
+  regionCode: string,
+): Promise<RegionDistribution> {
+  const [election] = await db
+    .select()
+    .from(elections)
+    .where(eq(elections.id, electionId))
+    .limit(1);
+  if (!election) return { rows: [], totalVotes: 0, raceKind: "party" };
+
+  const raceKind: "party" | "candidate" =
+    election.necCode === "2" || election.necCode === "6" ? "candidate" : "party";
+
+  const votes = await db
+    .select()
+    .from(voteTotals)
+    .where(and(eq(voteTotals.electionId, electionId), eq(voteTotals.regionCode, regionCode)));
+
+  if (votes.length === 0) return { rows: [], totalVotes: 0, raceKind };
+
+  const totalVotes = votes.reduce((sum, v) => sum + v.votes, 0);
+  const allParties = await db.select().from(parties);
+  const pById = new Map(allParties.map((p) => [p.id, p]));
+
+  const rows: RegionDistRow[] = votes
+    .map((v) => {
+      const p = pById.get(v.partyId);
+      return {
+        partyId: v.partyId,
+        partyName: p?.name ?? v.partyId,
+        color: p?.color ?? "#9CA3AF",
+        votes: v.votes,
+        share: totalVotes > 0 ? v.votes / totalVotes : 0,
+        prevShare: null, // 직전 비교는 후속 phase (1.3.2). 본 phase 는 placeholder
+      };
+    })
+    .sort((a, b) => b.votes - a.votes);
+
+  return { rows, totalVotes, raceKind };
+}
+
+export interface ChildrenTableRow {
+  code: string;
+  name: string;
+  byParty: Record<string, number>;
+  total: number;
+}
+
+export interface ChildrenTable {
+  children: ChildrenTableRow[];
+  partyColumns: { partyId: string; partyName: string; color: string }[];
+}
+
+export async function getRegionChildrenTable(
+  electionId: string,
+  regionCode: string,
+): Promise<ChildrenTable> {
+  const childRegions = await db
+    .select()
+    .from(regions)
+    .where(eq(regions.parentCode, regionCode));
+  if (childRegions.length === 0) return { children: [], partyColumns: [] };
+
+  const childCodes = childRegions.map((r) => r.code);
+  const allVotes = await db
+    .select()
+    .from(voteTotals)
+    .where(
+      and(
+        eq(voteTotals.electionId, electionId),
+        inArray(voteTotals.regionCode, childCodes),
+      ),
+    );
+
+  // 정당 메타
+  const allParties = await db.select().from(parties);
+  const pById = new Map(allParties.map((p) => [p.id, p]));
+
+  // 정당별 합산 → 상위 7 + justice 항상 포함
+  const partySum = new Map<string, number>();
+  for (const v of allVotes) {
+    partySum.set(v.partyId, (partySum.get(v.partyId) ?? 0) + v.votes);
+  }
+  const ranked = [...partySum.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([pid]) => pid);
+  const topPartyIds = new Set(ranked.slice(0, 7));
+  topPartyIds.add("justice");
+
+  const partyColumns = [...topPartyIds]
+    .filter((pid) => pById.has(pid))
+    .map((pid) => {
+      const p = pById.get(pid)!;
+      return { partyId: pid, partyName: p.name, color: p.color };
+    });
+
+  // children 행 구성
+  const byCode = new Map<string, ChildrenTableRow>();
+  for (const r of childRegions) {
+    byCode.set(r.code, { code: r.code, name: r.name, byParty: {}, total: 0 });
+  }
+  for (const v of allVotes) {
+    const row = byCode.get(v.regionCode);
+    if (!row) continue;
+    if (topPartyIds.has(v.partyId)) {
+      row.byParty[v.partyId] = (row.byParty[v.partyId] ?? 0) + v.votes;
+    }
+    row.total += v.votes;
+  }
+
+  // justice 기본값 0 보장 (데이터 없어도 byParty["justice"] 는 number 로 존재)
+  for (const row of byCode.values()) {
+    if (!("justice" in row.byParty)) {
+      row.byParty["justice"] = 0;
+    }
+  }
+
+  const children = [...byCode.values()].sort((a, b) => b.total - a.total);
+  return { children, partyColumns };
+}
+
+export interface PresubElDayRow {
+  regionCode: string;
+  regionName: string;
+  partyId: string;
+  presub: number;
+  elDay: number;
+}
+
+export interface PresubElDayResult {
+  hasData: boolean;
+  rows: PresubElDayRow[];
+}
+
+/**
+ * scope='self' — regionCode 의 polling_station_votes 정당별 (presub vs el_day) 합
+ * scope='children' — regionCode 의 직접 children (emd) 각각의 정당별 분해
+ */
+export async function getPresubVsElDay(
+  electionId: string,
+  regionCode: string,
+  scope: "self" | "children",
+): Promise<PresubElDayResult> {
+  // 적재된 polling_stations 행 존재 여부 확인 (election 단위)
+  const sample = await db
+    .select({ id: pollingStations.id })
+    .from(pollingStations)
+    .where(eq(pollingStations.electionId, electionId))
+    .limit(1);
+  if (sample.length === 0) return { hasData: false, rows: [] };
+
+  // regionCode 가 sigungu 면 emd 들 가져오기 (children scope)
+  // self scope 면 단일 regionCode 사용
+  let targetEmdCodes: string[];
+  if (scope === "children") {
+    const children = await db.select().from(regions).where(eq(regions.parentCode, regionCode));
+    targetEmdCodes = children.map((r) => r.code);
+    if (targetEmdCodes.length === 0) return { hasData: false, rows: [] };
+  } else {
+    targetEmdCodes = [regionCode];
+  }
+
+  // join + group: polling_station_votes × polling_stations, where emd_code in targetEmdCodes
+  type RawRow = { region_code: string; party_id: string; presub: number; el_day: number };
+  const rows = await sql<RawRow[]>`
+    SELECT
+      s.emd_code AS region_code,
+      v.party_id,
+      sum(CASE WHEN s.kind = 'presub' THEN v.votes ELSE 0 END)::int AS presub,
+      sum(CASE WHEN s.kind = 'el_day' THEN v.votes ELSE 0 END)::int AS el_day
+    FROM polling_station_votes v
+    JOIN polling_stations s ON s.id = v.station_id
+    WHERE s.election_id = ${electionId}
+      AND s.emd_code = ANY(${targetEmdCodes}::text[])
+      AND v.party_id IS NOT NULL
+    GROUP BY s.emd_code, v.party_id
+  `;
+
+  if (rows.length === 0) return { hasData: false, rows: [] };
+
+  // region name lookup
+  const regionRows = await db.select().from(regions).where(inArray(regions.code, targetEmdCodes));
+  const nameByCode = new Map(regionRows.map((r) => [r.code, r.name]));
+
+  return {
+    hasData: true,
+    rows: rows.map((r) => ({
+      regionCode: r.region_code,
+      regionName: nameByCode.get(r.region_code) ?? r.region_code,
+      partyId: r.party_id,
+      presub: r.presub,
+      elDay: r.el_day,
+    })),
+  };
+}
+
+/**
+ * 한 region 의 한 정당 역대 득표율 추이. 재보궐(isByelection=true) 제외.
+ * SeriesPoint 타입 재사용 (홈 HomeChart 와 호환).
+ */
+export async function getRegionTimeseries(
+  regionCode: string,
+  focusPartyId: string,
+): Promise<SeriesPoint[]> {
+  const [region] = await db.select().from(regions).where(eq(regions.code, regionCode)).limit(1);
+  if (!region) return [];
+
+  const [party] = await db.select().from(parties).where(eq(parties.id, focusPartyId)).limit(1);
+  if (!party) return [];
+
+  // 재보궐 제외 + displayOrder 순
+  const targetElections = await db
+    .select()
+    .from(elections)
+    .where(eq(elections.isByelection, false))
+    .orderBy(elections.displayOrder);
+
+  if (targetElections.length === 0) return [];
+
+  const electionIds = targetElections.map((e) => e.id);
+  const votes = await db
+    .select()
+    .from(voteTotals)
+    .where(
+      and(
+        inArray(voteTotals.electionId, electionIds),
+        eq(voteTotals.regionCode, regionCode),
+        eq(voteTotals.partyId, focusPartyId),
+      ),
+    );
+  const regs = await db
+    .select()
+    .from(regionTotals)
+    .where(
+      and(
+        inArray(regionTotals.electionId, electionIds),
+        eq(regionTotals.regionCode, regionCode),
+      ),
+    );
+
+  const votesByElection = new Map(votes.map((v) => [v.electionId, v.votes]));
+  const totalByElection = new Map(regs.map((r) => [r.electionId, r.totalVotes ?? 0]));
+
+  const series: SeriesPoint[] = [];
+  for (const e of targetElections) {
+    const v = votesByElection.get(e.id);
+    if (v === undefined) continue;
+    const total = totalByElection.get(e.id) ?? null;
+    const pct =
+      total != null && total > 0 ? Math.round((v / total) * 1000) / 10 : null;
+    series.push({
+      election: {
+        id: e.id,
+        date: String(e.date),
+        type: e.type,
+        name: e.name,
+        displayOrder: e.displayOrder,
+        isByelection: e.isByelection,
+      },
+      partyId: focusPartyId,
+      partyName: party.name,
+      partyColor: party.color,
+      partyFamily: party.family,
+      votes: v,
+      totalVotes: total,
+      pct,
+    });
+  }
+
+  return series;
 }
