@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import type { HomeState } from "../lib/url-state";
 import { encodeState } from "../lib/url-state";
 
@@ -72,29 +72,35 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
   const router = useRouter();
   const [pending, start] = useTransition();
 
+  // Optimistic UI: 체크박스/select 클릭 즉시 local state 갱신 → URL 갱신 (region.json fetch + RSC 재실행) 은 background.
+  // server prop 이 바뀌면 (e.g. 외부 nav, back/forward) sync.
+  const [optimisticState, setOptimisticState] = useState<HomeState>(state);
+  useEffect(() => setOptimisticState(state), [state]);
+
   function push(next: HomeState) {
+    setOptimisticState(next);            // 즉시 UI 반영
     const qs = encodeState(next);
-    start(() => router.push(qs ? `/?${qs}` : "/"));
+    start(() => router.push(qs ? `/?${qs}` : "/"));  // background URL 갱신
   }
 
   function toggleParty(pid: string) {
-    const next = state.parties.includes(pid)
-      ? state.parties.filter((x) => x !== pid)
-      : [...state.parties, pid];
-    push({ ...state, parties: next });
+    const next = optimisticState.parties.includes(pid)
+      ? optimisticState.parties.filter((x) => x !== pid)
+      : [...optimisticState.parties, pid];
+    push({ ...optimisticState, parties: next });
   }
 
   function toggleType(t: string) {
-    const cur = state.types === "all" ? types : state.types;
+    const cur = optimisticState.types === "all" ? types : optimisticState.types;
     const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
-    push({ ...state, types: next.length === types.length ? "all" : next });
+    push({ ...optimisticState, types: next.length === types.length ? "all" : next });
   }
 
   const sidos = regions.filter((r) => r.level === "sido");
-  const selSido = sidoOfRegion(state.region);
-  const selSigungu = sigunguOfRegion(state.region);
-  const selEmd = emdOfRegion(state.region);
-  const selStation = stationNameOf(state.region);
+  const selSido = useMemo(() => sidoOfRegion(optimisticState.region), [optimisticState.region]);
+  const selSigungu = useMemo(() => sigunguOfRegion(optimisticState.region), [optimisticState.region]);
+  const selEmd = useMemo(() => emdOfRegion(optimisticState.region), [optimisticState.region]);
+  const selStation = useMemo(() => stationNameOf(optimisticState.region), [optimisticState.region]);
 
   const sigungus = selSido === "all"
     ? []
@@ -103,25 +109,25 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
         .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
   function onSidoChange(next: string) {
-    push({ ...state, region: next });
+    push({ ...optimisticState, region: next });
   }
   function onSigunguChange(next: string) {
-    push({ ...state, region: next === "all" ? selSido : next });
+    push({ ...optimisticState, region: next === "all" ? selSido : next });
   }
   function onEmdChange(next: string) {
     // emd "(전체)" 선택 시 sigungu 단위로 복귀
-    push({ ...state, region: next === "all" ? (selSigungu ?? selSido) : next });
+    push({ ...optimisticState, region: next === "all" ? (selSigungu ?? selSido) : next });
   }
   function onStationChange(next: string) {
     // station "(전체)" 선택 시 emd 단위로 복귀
     if (next === "all") {
-      push({ ...state, region: selEmd ?? selSigungu ?? selSido });
+      push({ ...optimisticState, region: selEmd ?? selSigungu ?? selSido });
       return;
     }
     // next 는 station name. emd + sigungu code 와 합성
     const sigungu = selSigungu ?? "";
     const emd = selEmd ?? "";
-    push({ ...state, region: `station:${sigungu}:${emd}:${next}` });
+    push({ ...optimisticState, region: `station:${sigungu}:${emd}:${next}` });
   }
 
   return (
@@ -168,7 +174,7 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <div className="flex flex-wrap gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">선거유형</span>
         {types.map((t) => {
-          const checked = state.types === "all" || state.types.includes(t);
+          const checked = optimisticState.types === "all" || optimisticState.types.includes(t);
           return (
             <label key={t} className="flex items-center gap-1">
               <input type="checkbox" checked={checked} onChange={() => toggleType(t)} />
@@ -181,7 +187,7 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <div className="flex flex-wrap gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">정당</span>
         {parties.filter((p) => p.id !== "independent" && p.id !== "other").map((p) => {
-          const checked = state.parties.includes(p.id);
+          const checked = optimisticState.parties.includes(p.id);
           return (
             <label key={p.id} className="flex items-center gap-1" style={{ color: checked ? p.color : undefined }}>
               <input type="checkbox" checked={checked} onChange={() => toggleParty(p.id)} />
@@ -194,8 +200,8 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
-          checked={state.satellite === "merged"}
-          onChange={(e) => push({ ...state, satellite: e.target.checked ? "merged" : "split" })}
+          checked={optimisticState.satellite === "merged"}
+          onChange={(e) => push({ ...optimisticState, satellite: e.target.checked ? "merged" : "split" })}
         />
         <span>위성정당 합산</span>
       </label>
@@ -203,8 +209,8 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
-          checked={state.mergeProgressive}
-          onChange={(e) => push({ ...state, mergeProgressive: e.target.checked })}
+          checked={optimisticState.mergeProgressive}
+          onChange={(e) => push({ ...optimisticState, mergeProgressive: e.target.checked })}
         />
         <span>진보 합산 라인</span>
       </label>
@@ -212,12 +218,12 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">기간</span>
         <select
-          value={state.from ?? ""}
+          value={optimisticState.from ?? ""}
           onChange={(e) => {
             const next = e.target.value === "" ? null : e.target.value;
             // from > to 이면 to 도 같이 풀어줌 (사용자 혼란 방지)
-            const nextTo = next && state.to && next > state.to ? null : (state.to ?? null);
-            push({ ...state, from: next, to: nextTo });
+            const nextTo = next && optimisticState.to && next > optimisticState.to ? null : (optimisticState.to ?? null);
+            push({ ...optimisticState, from: next, to: nextTo });
           }}
           className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
         >
@@ -226,11 +232,11 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
         </select>
         <span className="text-zinc-400">~</span>
         <select
-          value={state.to ?? ""}
+          value={optimisticState.to ?? ""}
           onChange={(e) => {
             const next = e.target.value === "" ? null : e.target.value;
-            const nextFrom = next && state.from && state.from > next ? null : (state.from ?? null);
-            push({ ...state, to: next, from: nextFrom });
+            const nextFrom = next && optimisticState.from && optimisticState.from > next ? null : (optimisticState.from ?? null);
+            push({ ...optimisticState, to: next, from: nextFrom });
           }}
           className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
         >
