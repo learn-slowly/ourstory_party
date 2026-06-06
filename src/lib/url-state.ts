@@ -64,3 +64,9 @@ export function encodeState(s: HomeState): string {
   if (s.to) parts.push(`to=${s.to}`);
   return parts.join("&");
 }
+
+// region 페이지 전용 — URL ?region= 쿼리를 무시하고 default 로 강제.
+// encodeState 가 default 와 같으면 region 키를 자동 생략하므로, region 페이지 URL 에 region 쿼리가 누출되지 않음.
+export function normalizeRegionState(raw: HomeState): HomeState {
+  return { ...raw, region: DEFAULT_STATE.region };
+}
