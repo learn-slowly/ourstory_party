@@ -48,11 +48,18 @@ export function buildHomeChart(input: Input): { data: ChartRow[]; lines: ChartLi
     return partyById.get(pid)?.satelliteOf ?? pid;
   };
 
-  // 대상 election — 재보궐 제외 + type 필터
+  // 기간 필터 — from..to 범위 (YYYY 4자리). null/undefined 면 미적용.
+  // election.date 는 ISO 형식이므로 문자열 비교로 충분 (YYYY-MM-DD vs YYYY-01-01).
+  const fromBound = state.from ? `${state.from}-01-01` : null;
+  const toBound = state.to ? `${state.to}-12-31` : null;
+
+  // 대상 election — 재보궐 제외 + type 필터 + 기간 필터
   const targetElections = elections.filter((e) => {
     if (e.isByelection) return false;
-    if (state.types === "all") return true;
-    return (state.types as string[]).includes(e.type);
+    if (state.types !== "all" && !(state.types as string[]).includes(e.type)) return false;
+    if (fromBound && e.date < fromBound) return false;
+    if (toBound && e.date > toBound) return false;
+    return true;
   });
   if (targetElections.length === 0) return { data: [], lines: [] };
   const targetSet = new Set(targetElections.map((e) => e.id));
@@ -170,13 +177,25 @@ export function buildFilterOptions(input: {
   regions: { code: string; level: string; name: string; parentCode?: string | null }[];
   types: string[];
   parties: { id: string; name: string; family: string; color: string; satelliteOf?: string | null }[];
+  yearOptions: string[];
 } {
   const regions: { code: string; level: string; name: string; parentCode?: string | null }[] = [];
   for (const s of input.sido) regions.push({ code: s.code, level: "sido", name: s.name, parentCode: null });
   for (const [sidoCode, list] of Object.entries(input.sigunguByRegion)) {
     for (const sg of list) regions.push({ code: sg.code, level: "sigungu", name: sg.name, parentCode: sidoCode });
   }
-  const types = [...new Set(input.elections.filter((e) => !e.isByelection).map((e) => e.type))];
+  const nonBye = input.elections.filter((e) => !e.isByelection);
+  const types = [...new Set(nonBye.map((e) => e.type))];
+  // 가용 election year set — 1948~2026 범위 안만, 오름차순.
+  const years = new Set<string>();
+  for (const e of nonBye) {
+    const y = String(e.date).slice(0, 4);
+    if (/^\d{4}$/.test(y)) {
+      const n = Number(y);
+      if (n >= 1948 && n <= 2026) years.add(y);
+    }
+  }
+  const yearOptions = [...years].sort();
   return {
     regions,
     types,
@@ -187,6 +206,7 @@ export function buildFilterOptions(input: {
       color: p.color,
       satelliteOf: p.satelliteOf ?? null,
     })),
+    yearOptions,
   };
 }
 

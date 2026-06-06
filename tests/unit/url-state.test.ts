@@ -7,6 +7,8 @@ const DEFAULT: HomeState = {
   parties: ["justice", "labor", "green", "progressive"],
   satellite: "split",
   mergeProgressive: false,
+  from: null,
+  to: null,
 };
 
 describe("parseSearchParams", () => {
@@ -27,6 +29,8 @@ describe("parseSearchParams", () => {
       parties: ["justice", "labor"],
       satellite: "merged",
       mergeProgressive: true,
+      from: null,
+      to: null,
     });
   });
 
@@ -38,6 +42,14 @@ describe("parseSearchParams", () => {
     expect(parsed.parties).toEqual(["justice"]);
     expect(parsed.satellite).toBe("merged");
   });
+
+  it("from/to YYYY 파싱 + 범위 밖·잘못된 형식 거부", () => {
+    expect(parseSearchParams({ from: "2020", to: "2025" }).from).toBe("2020");
+    expect(parseSearchParams({ from: "2020", to: "2025" }).to).toBe("2025");
+    expect(parseSearchParams({ from: "20" }).from).toBe(null);
+    expect(parseSearchParams({ from: "2030" }).from).toBe(null);
+    expect(parseSearchParams({ to: "1900" }).to).toBe(null);
+  });
 });
 
 describe("encodeState", () => {
@@ -48,5 +60,10 @@ describe("encodeState", () => {
   it("non-default 만 query 에 포함", () => {
     expect(encodeState({ ...DEFAULT, region: "48", mergeProgressive: true }))
       .toBe("region=48&merge_prog=1");
+  });
+
+  it("from/to 가 있으면 query 에 포함", () => {
+    expect(encodeState({ ...DEFAULT, from: "2020", to: "2025" }))
+      .toBe("from=2020&to=2025");
   });
 });

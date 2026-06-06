@@ -52,6 +52,7 @@ interface Props {
   stationOptions: StationOpt[];
   types: string[];
   parties: PartyOpt[];
+  yearOptions: string[];
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -67,7 +68,7 @@ const TYPE_LABEL: Record<string, string> = {
   superintendent: "교육감",
 };
 
-export function HeaderControls({ state, regions, emdOptions, stationOptions, types, parties }: Props) {
+export function HeaderControls({ state, regions, emdOptions, stationOptions, types, parties, yearOptions }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -206,6 +207,36 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
           onChange={(e) => push({ ...state, mergeProgressive: e.target.checked })}
         />
         <span>진보 합산 라인</span>
+      </label>
+
+      <label className="flex items-center gap-2">
+        <span className="text-zinc-600 dark:text-zinc-400">기간</span>
+        <select
+          value={state.from ?? ""}
+          onChange={(e) => {
+            const next = e.target.value === "" ? null : e.target.value;
+            // from > to 이면 to 도 같이 풀어줌 (사용자 혼란 방지)
+            const nextTo = next && state.to && next > state.to ? null : (state.to ?? null);
+            push({ ...state, from: next, to: nextTo });
+          }}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+        >
+          <option value="">전체</option>
+          {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <span className="text-zinc-400">~</span>
+        <select
+          value={state.to ?? ""}
+          onChange={(e) => {
+            const next = e.target.value === "" ? null : e.target.value;
+            const nextFrom = next && state.from && state.from > next ? null : (state.from ?? null);
+            push({ ...state, to: next, from: nextFrom });
+          }}
+          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+        >
+          <option value="">전체</option>
+          {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
       </label>
     </div>
   );
