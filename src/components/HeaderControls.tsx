@@ -1,9 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo } from "react";
 import type { HomeState } from "../lib/url-state";
-import { encodeState } from "../lib/url-state";
 
 interface RegionOpt { code: string; level: string; name: string; parentCode?: string | null; }
 interface EmdOpt { code: string; name: string; }
@@ -47,6 +45,8 @@ function stationNameOf(rcode: string): string | null {
 
 interface Props {
   state: HomeState;
+  onChange: (next: HomeState) => void;
+  pending?: boolean;
   regions: RegionOpt[];
   emdOptions: EmdOpt[];
   stationOptions: StationOpt[];
@@ -68,39 +68,28 @@ const TYPE_LABEL: Record<string, string> = {
   superintendent: "교육감",
 };
 
-export function HeaderControls({ state, regions, emdOptions, stationOptions, types, parties, yearOptions }: Props) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-
-  // Optimistic UI: 체크박스/select 클릭 즉시 local state 갱신 → URL 갱신 (region.json fetch + RSC 재실행) 은 background.
-  // server prop 이 바뀌면 (e.g. 외부 nav, back/forward) sync.
-  const [optimisticState, setOptimisticState] = useState<HomeState>(state);
-  useEffect(() => setOptimisticState(state), [state]);
-
-  function push(next: HomeState) {
-    setOptimisticState(next);            // 즉시 UI 반영
-    const qs = encodeState(next);
-    start(() => router.push(qs ? `/?${qs}` : "/"));  // background URL 갱신
-  }
-
+// state owner 는 HomeView. 여기서는 controlled component 로 state + onChange 만 받음.
+// 정당/유형/기간 토글은 즉시 onChange 호출 → HomeView 가 useMemo 로 chart 재계산 (즉시 반영).
+// region 토글도 동일하지만, HomeView 에서 server roundtrip 트리거 (다른 region.json fetch).
+export function HeaderControls({ state, onChange, pending, regions, emdOptions, stationOptions, types, parties, yearOptions }: Props) {
   function toggleParty(pid: string) {
-    const next = optimisticState.parties.includes(pid)
-      ? optimisticState.parties.filter((x) => x !== pid)
-      : [...optimisticState.parties, pid];
-    push({ ...optimisticState, parties: next });
+    const next = state.parties.includes(pid)
+      ? state.parties.filter((x) => x !== pid)
+      : [...state.parties, pid];
+    onChange({ ...state, parties: next });
   }
 
   function toggleType(t: string) {
-    const cur = optimisticState.types === "all" ? types : optimisticState.types;
+    const cur = state.types === "all" ? types : state.types;
     const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
-    push({ ...optimisticState, types: next.length === types.length ? "all" : next });
+    onChange({ ...state, types: next.length === types.length ? "all" : next });
   }
 
   const sidos = regions.filter((r) => r.level === "sido");
-  const selSido = useMemo(() => sidoOfRegion(optimisticState.region), [optimisticState.region]);
-  const selSigungu = useMemo(() => sigunguOfRegion(optimisticState.region), [optimisticState.region]);
-  const selEmd = useMemo(() => emdOfRegion(optimisticState.region), [optimisticState.region]);
-  const selStation = useMemo(() => stationNameOf(optimisticState.region), [optimisticState.region]);
+  const selSido = useMemo(() => sidoOfRegion(state.region), [state.region]);
+  const selSigungu = useMemo(() => sigunguOfRegion(state.region), [state.region]);
+  const selEmd = useMemo(() => emdOfRegion(state.region), [state.region]);
+  const selStation = useMemo(() => stationNameOf(state.region), [state.region]);
 
   const sigungus = selSido === "all"
     ? []
@@ -109,25 +98,25 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
         .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
   function onSidoChange(next: string) {
-    push({ ...optimisticState, region: next });
+    onChange({ ...state, region: next });
   }
   function onSigunguChange(next: string) {
-    push({ ...optimisticState, region: next === "all" ? selSido : next });
+    onChange({ ...state, region: next === "all" ? selSido : next });
   }
   function onEmdChange(next: string) {
     // emd "(전체)" 선택 시 sigungu 단위로 복귀
-    push({ ...optimisticState, region: next === "all" ? (selSigungu ?? selSido) : next });
+    onChange({ ...state, region: next === "all" ? (selSigungu ?? selSido) : next });
   }
   function onStationChange(next: string) {
     // station "(전체)" 선택 시 emd 단위로 복귀
     if (next === "all") {
-      push({ ...optimisticState, region: selEmd ?? selSigungu ?? selSido });
+      onChange({ ...state, region: selEmd ?? selSigungu ?? selSido });
       return;
     }
     // next 는 station name. emd + sigungu code 와 합성
     const sigungu = selSigungu ?? "";
     const emd = selEmd ?? "";
-    push({ ...optimisticState, region: `station:${sigungu}:${emd}:${next}` });
+    onChange({ ...state, region: `station:${sigungu}:${emd}:${next}` });
   }
 
   return (
@@ -174,7 +163,7 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <div className="flex flex-wrap gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">선거유형</span>
         {types.map((t) => {
-          const checked = optimisticState.types === "all" || optimisticState.types.includes(t);
+          const checked = state.types === "all" || state.types.includes(t);
           return (
             <label key={t} className="flex items-center gap-1">
               <input type="checkbox" checked={checked} onChange={() => toggleType(t)} />
@@ -187,7 +176,7 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <div className="flex flex-wrap gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">정당</span>
         {parties.filter((p) => p.id !== "independent" && p.id !== "other").map((p) => {
-          const checked = optimisticState.parties.includes(p.id);
+          const checked = state.parties.includes(p.id);
           return (
             <label key={p.id} className="flex items-center gap-1" style={{ color: checked ? p.color : undefined }}>
               <input type="checkbox" checked={checked} onChange={() => toggleParty(p.id)} />
@@ -200,8 +189,8 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
-          checked={optimisticState.satellite === "merged"}
-          onChange={(e) => push({ ...optimisticState, satellite: e.target.checked ? "merged" : "split" })}
+          checked={state.satellite === "merged"}
+          onChange={(e) => onChange({ ...state, satellite: e.target.checked ? "merged" : "split" })}
         />
         <span>위성정당 합산</span>
       </label>
@@ -209,8 +198,8 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
-          checked={optimisticState.mergeProgressive}
-          onChange={(e) => push({ ...optimisticState, mergeProgressive: e.target.checked })}
+          checked={state.mergeProgressive}
+          onChange={(e) => onChange({ ...state, mergeProgressive: e.target.checked })}
         />
         <span>진보 합산 라인</span>
       </label>
@@ -218,12 +207,12 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
       <label className="flex items-center gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">기간</span>
         <select
-          value={optimisticState.from ?? ""}
+          value={state.from ?? ""}
           onChange={(e) => {
             const next = e.target.value === "" ? null : e.target.value;
             // from > to 이면 to 도 같이 풀어줌 (사용자 혼란 방지)
-            const nextTo = next && optimisticState.to && next > optimisticState.to ? null : (optimisticState.to ?? null);
-            push({ ...optimisticState, from: next, to: nextTo });
+            const nextTo = next && state.to && next > state.to ? null : (state.to ?? null);
+            onChange({ ...state, from: next, to: nextTo });
           }}
           className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
         >
@@ -232,11 +221,11 @@ export function HeaderControls({ state, regions, emdOptions, stationOptions, typ
         </select>
         <span className="text-zinc-400">~</span>
         <select
-          value={optimisticState.to ?? ""}
+          value={state.to ?? ""}
           onChange={(e) => {
             const next = e.target.value === "" ? null : e.target.value;
-            const nextFrom = next && optimisticState.from && optimisticState.from > next ? null : (optimisticState.from ?? null);
-            push({ ...optimisticState, to: next, from: nextFrom });
+            const nextFrom = next && state.from && state.from > next ? null : (state.from ?? null);
+            onChange({ ...state, to: next, from: nextFrom });
           }}
           className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
         >

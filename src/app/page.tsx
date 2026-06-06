@@ -6,7 +6,7 @@ import {
   getStationFile,
   listStationsOfEmd,
 } from "../lib/static-data";
-import { buildHomeChart, buildFilterOptions } from "../lib/static-series";
+import { buildFilterOptions } from "../lib/static-series";
 
 // 홈은 빌드 타임 SSG. URL searchParams 의존 분기는 클라이언트 라우터가 핸들 (Next.js 가 동적 segment 가 아닌 한 force-static 허용).
 export const dynamic = "force-static";
@@ -122,13 +122,8 @@ export default async function Home({ searchParams }: PageProps) {
     }
   }
 
-  const { data, lines } = buildHomeChart({
-    state,
-    elections: index.elections,
-    parties: index.parties,
-    sources,
-  });
-
+  // buildHomeChart 는 client 의 HomeView 에서 useMemo 로 호출.
+  // 정당/유형/기간/위성/진보합산 토글 시 server roundtrip 없이 즉시 chart 재계산.
   return (
     <main className="max-w-5xl mx-auto px-4 py-6">
       <h1 className="text-xl font-bold mb-1">진보계열 정당 역대 선거 시계열</h1>
@@ -138,8 +133,9 @@ export default async function Home({ searchParams }: PageProps) {
         filterOptions={filterOptions}
         emdOptions={emdOptions}
         stationOptions={stationOptions}
-        data={data}
-        lines={lines}
+        sources={sources}
+        elections={index.elections}
+        parties={index.parties}
       />
     </main>
   );
