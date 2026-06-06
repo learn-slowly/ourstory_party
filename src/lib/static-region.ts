@@ -1,7 +1,7 @@
 // src/lib/static-region.ts
 // 정적 RegionFile/ElectionDetailFile/StaticIndex → /region/[code] 페이지 컴포넌트가 요구하는
 // 기존 SQL 기반 prop 모양으로 변환하는 어댑터.
-// 컴포넌트(RegionPartyDist/RegionChildrenTable/PresubVsElDay/RegionMiniSeries/RegionView/Breadcrumb)는
+// 컴포넌트(RegionPartyDist/RegionChildrenTable/PresubVsElDay/RegionView/Breadcrumb)는
 // 시각 동작을 그대로 보존하기 위해 손대지 않고, 데이터 레이어만 정적 산출물로 교체한다.
 import type {
   RegionFile,
@@ -16,8 +16,6 @@ import type {
   RegionDistribution,
   ChildrenTable,
   PresubElDayResult,
-  SeriesPoint,
-  ElectionMeta as QueryElectionMeta,
   RegionRow,
 } from "@/lib/region-types";
 
@@ -255,51 +253,6 @@ export function buildPresubVsElDay(
   return { hasData: true, rows: [...acc.values()] };
 }
 
-/**
- * RegionFile.timeseries[focusPartyId] + index.elections → SeriesPoint[].
- * 재보궐 election 은 제외. queries.ts 의 getRegionTimeseries 와 동일 의미.
- */
-export function buildRegionTimeseries(
-  region: RegionFile,
-  focusPartyId: string,
-  index: StaticIndex,
-): SeriesPoint[] {
-  const party = index.parties.find((p) => p.id === focusPartyId);
-  if (!party) return [];
-  const partyPoints = region.timeseries[focusPartyId] ?? [];
-  const pointsByElection = new Map(partyPoints.map((p) => [p.electionId, p]));
-
-  const targetElections = [...index.elections]
-    .filter((e) => !e.isByelection)
-    .sort((a, b) => a.displayOrder - b.displayOrder);
-
-  const out: SeriesPoint[] = [];
-  for (const e of targetElections) {
-    const p = pointsByElection.get(e.id);
-    if (!p) continue;
-    const total = p.totalVotes;
-    const pct = total > 0 ? Math.round((p.votes / total) * 1000) / 10 : null;
-    const meta: QueryElectionMeta = {
-      id: e.id,
-      date: e.date,
-      type: e.type,
-      name: e.name,
-      displayOrder: e.displayOrder,
-      isByelection: e.isByelection,
-    };
-    out.push({
-      election: meta,
-      partyId: focusPartyId,
-      partyName: party.name,
-      partyColor: party.color,
-      partyFamily: party.family,
-      votes: p.votes,
-      totalVotes: total,
-      pct,
-    });
-  }
-  return out;
-}
 
 /**
  * RegionFile.elections 안에 존재하는 electionId 중 index.elections 기준 displayOrder desc 정렬.
