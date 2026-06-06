@@ -13,7 +13,7 @@ interface StationOpt { sigunguCode: string; emdCode: string; name: string; }
 
 interface Props {
   state: HomeState;
-  filterOptions: { regions: RegionOpt[]; types: string[]; parties: PartyOpt[] };
+  filterOptions: { regions: RegionOpt[]; types: string[]; parties: PartyOpt[]; yearOptions: string[] };
   emdOptions: EmdOpt[];
   stationOptions: StationOpt[];
   data: ChartRow[];
@@ -30,6 +30,7 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, dat
         stationOptions={stationOptions}
         types={filterOptions.types}
         parties={filterOptions.parties}
+        yearOptions={filterOptions.yearOptions}
       />
       <HomeChart data={data} lines={lines} />
       <StatsCards data={data} lines={lines} />
