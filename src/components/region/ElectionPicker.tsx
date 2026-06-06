@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { buildRegionUrl } from "./election-picker-url";
 
@@ -17,6 +17,7 @@ interface Props {
 
 export function ElectionPicker({ selectedId, options, regionCode }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -28,7 +29,7 @@ export function ElectionPicker({ selectedId, options, regionCode }: Props) {
         onChange={(e) => {
           const next = e.target.value;
           startTransition(() => {
-            router.push(buildRegionUrl(regionCode, next));
+            router.push(buildRegionUrl(regionCode, next, searchParams));
           });
         }}
         className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-xs"
