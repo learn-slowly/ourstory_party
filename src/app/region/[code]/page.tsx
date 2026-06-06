@@ -10,9 +10,10 @@ import {
   buildRegionDistribution,
   buildChildrenTable,
   buildPresubVsElDay,
-  buildRegionTimeseries,
   pickRegionElections,
 } from "@/lib/static-region";
+import { buildFilterOptions } from "@/lib/static-series";
+import { parseSearchParams, normalizeRegionState } from "@/lib/url-state";
 import { RegionView } from "@/components/region/RegionView";
 
 export const dynamic = "force-static";
@@ -28,10 +29,17 @@ export async function generateStaticParams() {
 
 interface PageProps {
   params: Promise<{ code: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function RegionPage({ params }: PageProps) {
+export default async function RegionPage({ params, searchParams }: PageProps) {
   const { code } = await params;
+  const sp = await searchParams;
+  const flat: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(sp)) {
+    flat[k] = Array.isArray(v) ? v[0] : v;
+  }
+  const initialState = normalizeRegionState(parseSearchParams(flat));
 
   if (!/^\d{10}$/.test(code)) notFound();
 
@@ -70,8 +78,12 @@ export default async function RegionPage({ params }: PageProps) {
     }
   }
 
-  // RegionMiniSeries: justice 시계열
-  const series = buildRegionTimeseries(regionFile, "justice", index);
+  const filterOptions = buildFilterOptions({
+    parties: index.parties,
+    elections: index.elections,
+    sido: index.regions.sido,
+    sigunguByRegion: index.regions.sigunguByRegion,
+  });
 
   return (
     <RegionView
@@ -81,7 +93,13 @@ export default async function RegionPage({ params }: PageProps) {
       dist={dist}
       table={table}
       presub={presub}
-      series={series}
+      regionCode={code}
+      regionName={regionFile.name}
+      timeseries={regionFile.timeseries}
+      initialState={initialState}
+      filterOptions={filterOptions}
+      elections={index.elections}
+      parties={index.parties}
     />
   );
 }

@@ -2,19 +2,28 @@ import type {
   RegionDistribution,
   ChildrenTable,
   PresubElDayResult,
-  SeriesPoint,
   RegionContext,
 } from "@/lib/region-types";
+import type { ElectionMeta, PartyMeta, TimeseriesPoint } from "@/types/static";
+import type { HomeState } from "@/lib/url-state";
 import { Breadcrumb } from "./Breadcrumb";
 import { ElectionPicker } from "./ElectionPicker";
 import { RegionPartyDist } from "./RegionPartyDist";
 import { RegionChildrenTable } from "./RegionChildrenTable";
 import { PresubVsElDay } from "./PresubVsElDay";
-import { RegionMiniSeries } from "./RegionMiniSeries";
+import { RegionTimeseries } from "./RegionTimeseries";
 
 interface ElectionLike {
   id: string;
   name: string;
+}
+
+interface PartyOpt {
+  id: string;
+  name: string;
+  family: string;
+  color: string;
+  satelliteOf?: string | null;
 }
 
 interface Props {
@@ -24,10 +33,19 @@ interface Props {
   dist: RegionDistribution;
   table: ChildrenTable | null;
   presub: PresubElDayResult | null;
-  series: SeriesPoint[];
+  regionCode: string;
+  regionName: string;
+  timeseries: Record<string, TimeseriesPoint[]>;
+  initialState: HomeState;
+  filterOptions: { types: string[]; parties: PartyOpt[]; yearOptions: string[] };
+  elections: ElectionMeta[];
+  parties: PartyMeta[];
 }
 
-export function RegionView({ ctx, election, electionOptions, dist, table, presub, series }: Props) {
+export function RegionView({
+  ctx, election, electionOptions, dist, table, presub,
+  regionCode, regionName, timeseries, initialState, filterOptions, elections, parties,
+}: Props) {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <header>
@@ -48,7 +66,15 @@ export function RegionView({ ctx, election, electionOptions, dist, table, presub
 
       {presub && ctx.level !== "emd" && <PresubVsElDay presub={presub} />}
 
-      <RegionMiniSeries series={series} regionName={ctx.region.name} />
+      <RegionTimeseries
+        regionCode={regionCode}
+        regionName={regionName}
+        timeseries={timeseries}
+        initialState={initialState}
+        filterOptions={filterOptions}
+        elections={elections}
+        parties={parties}
+      />
     </div>
   );
 }
