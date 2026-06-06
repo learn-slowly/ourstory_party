@@ -1,7 +1,5 @@
 import Link from "next/link";
-import type { regions as regionsTable } from "../../../db/schema";
-
-type RegionRow = typeof regionsTable.$inferSelect;
+import type { RegionRow } from "@/lib/region-types";
 
 interface Props {
   ancestors: RegionRow[];

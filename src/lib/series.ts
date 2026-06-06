@@ -1,4 +1,4 @@
-import type { SeriesPoint } from "./queries";
+import type { SeriesPoint } from "./region-types";
 
 export interface ChartLine {
   partyId: string;
