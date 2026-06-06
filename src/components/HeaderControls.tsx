@@ -53,6 +53,7 @@ interface Props {
   types: string[];
   parties: PartyOpt[];
   yearOptions: string[];
+  hideRegionPicker?: boolean;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -71,7 +72,7 @@ const TYPE_LABEL: Record<string, string> = {
 // state owner 는 HomeView. 여기서는 controlled component 로 state + onChange 만 받음.
 // 정당/유형/기간 토글은 즉시 onChange 호출 → HomeView 가 useMemo 로 chart 재계산 (즉시 반영).
 // region 토글도 동일하지만, HomeView 에서 server roundtrip 트리거 (다른 region.json fetch).
-export function HeaderControls({ state, onChange, pending, regions, emdOptions, stationOptions, types, parties, yearOptions }: Props) {
+export function HeaderControls({ state, onChange, pending, regions, emdOptions, stationOptions, types, parties, yearOptions, hideRegionPicker }: Props) {
   function toggleParty(pid: string) {
     const next = state.parties.includes(pid)
       ? state.parties.filter((x) => x !== pid)
@@ -121,44 +122,46 @@ export function HeaderControls({ state, onChange, pending, regions, emdOptions, 
 
   return (
     <div className={`flex flex-wrap gap-3 items-center text-sm ${pending ? "opacity-60" : ""}`}>
-      <label className="flex items-center gap-2">
-        <span className="text-zinc-600 dark:text-zinc-400">지역</span>
-        <select
-          value={selSido}
-          onChange={(e) => onSidoChange(e.target.value)}
-          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
-        >
-          <option value="all">전국</option>
-          {sidos.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
-        </select>
-        <select
-          value={selSigungu ?? "all"}
-          onChange={(e) => onSigunguChange(e.target.value)}
-          disabled={selSido === "all"}
-          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
-        >
-          <option value="all">(전체)</option>
-          {sigungus.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
-        </select>
-        <select
-          value={selEmd ?? "all"}
-          onChange={(e) => onEmdChange(e.target.value)}
-          disabled={!selSigungu || emdOptions.length === 0}
-          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
-        >
-          <option value="all">(전체)</option>
-          {emdOptions.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
-        </select>
-        <select
-          value={selStation ?? "all"}
-          onChange={(e) => onStationChange(e.target.value)}
-          disabled={!selEmd || stationOptions.length === 0}
-          className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
-        >
-          <option value="all">(전체)</option>
-          {stationOptions.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
-        </select>
-      </label>
+      {!hideRegionPicker && (
+        <label className="flex items-center gap-2">
+          <span className="text-zinc-600 dark:text-zinc-400">지역</span>
+          <select
+            value={selSido}
+            onChange={(e) => onSidoChange(e.target.value)}
+            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+          >
+            <option value="all">전국</option>
+            {sidos.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+          </select>
+          <select
+            value={selSigungu ?? "all"}
+            onChange={(e) => onSigunguChange(e.target.value)}
+            disabled={selSido === "all"}
+            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
+          >
+            <option value="all">(전체)</option>
+            {sigungus.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+          </select>
+          <select
+            value={selEmd ?? "all"}
+            onChange={(e) => onEmdChange(e.target.value)}
+            disabled={!selSigungu || emdOptions.length === 0}
+            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
+          >
+            <option value="all">(전체)</option>
+            {emdOptions.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+          </select>
+          <select
+            value={selStation ?? "all"}
+            onChange={(e) => onStationChange(e.target.value)}
+            disabled={!selEmd || stationOptions.length === 0}
+            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 disabled:opacity-50"
+          >
+            <option value="all">(전체)</option>
+            {stationOptions.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          </select>
+        </label>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <span className="text-zinc-600 dark:text-zinc-400">선거유형</span>
