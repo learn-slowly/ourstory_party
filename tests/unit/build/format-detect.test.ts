@@ -15,4 +15,7 @@ describe("detectFormat", () => {
   it("D — 2012 대선 .xls", () => {
     expect(detectFormat("tests/fixtures/nec-xlsx/format-d-2012-presidential.xls")).toBe("D");
   });
+  it("F — 2017 대선", () => {
+    expect(detectFormat("tests/fixtures/nec-xlsx/format-f-2017-presidential-sample.xlsx")).toBe("F");
+  });
 });

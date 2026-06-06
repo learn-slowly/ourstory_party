@@ -8,6 +8,7 @@ import { parseFormatA } from "./lib/parse-format-a";
 import { parseFormatB } from "./lib/parse-format-b";
 import { parseFormatC } from "./lib/parse-format-c";
 import { parseFormatD } from "./lib/parse-format-d";
+import { parseFormatF } from "./lib/parse-format-f";
 import { ParsedElection, ParsedStationRow } from "./lib/types";
 
 interface ElectionMap {
@@ -57,6 +58,7 @@ async function parseElection(m: ElectionMap): Promise<ParsedElection> {
     else if (fmt === "B") parsed = parseFormatB(f, { isProportional: !!m.isProportional });
     else if (fmt === "C") parsed = parseFormatC(f);
     else if (fmt === "D") parsed = parseFormatD(f);
+    else if (fmt === "F") parsed = parseFormatF(f);
     else throw new Error(`unknown format ${fmt}`);
     allRows.push(...parsed.rows);
     parsed.partyNames.forEach((n) => partySet.add(n));
