@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { HeaderControls } from "./HeaderControls";
 import { HomeChart } from "./HomeChart";
+import { HomeTable, downloadCsv } from "./HomeTable";
 import { StatsCards } from "./StatsCards";
 import { buildHomeChart } from "../lib/static-series";
 import { encodeState, type HomeState } from "../lib/url-state";
@@ -36,6 +37,9 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
   const [optimisticState, setOptimisticState] = useState<HomeState>(state);
   useEffect(() => setOptimisticState(state), [state]);
 
+  // 차트/표 보기 토글. local UI 상태이므로 URL 비동기화 불필요.
+  const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
+
   function handleChange(next: HomeState) {
     setOptimisticState(next);
     const qs = encodeState(next);
@@ -62,7 +66,48 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
         parties={filterOptions.parties}
         yearOptions={filterOptions.yearOptions}
       />
-      <HomeChart data={data} lines={lines} />
+      <div className="flex items-center gap-1 flex-wrap">
+        <div className="inline-flex rounded border border-zinc-300 dark:border-zinc-700 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setViewMode("chart")}
+            className={`px-3 py-1 text-sm ${
+              viewMode === "chart"
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "bg-white text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+            }`}
+            aria-pressed={viewMode === "chart"}
+          >
+            차트
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`px-3 py-1 text-sm border-l border-zinc-300 dark:border-zinc-700 ${
+              viewMode === "table"
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "bg-white text-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+            }`}
+            aria-pressed={viewMode === "table"}
+          >
+            표
+          </button>
+        </div>
+        {viewMode === "table" && data.length > 0 && (
+          <button
+            type="button"
+            onClick={() => downloadCsv(data, lines)}
+            className="ml-2 px-3 py-1 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          >
+            CSV 저장
+          </button>
+        )}
+      </div>
+      {viewMode === "chart" ? (
+        <HomeChart data={data} lines={lines} />
+      ) : (
+        <HomeTable data={data} lines={lines} />
+      )}
       <StatsCards data={data} lines={lines} />
     </div>
   );
