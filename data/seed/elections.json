@@ -8,6 +8,8 @@
 
   { "id": "2002-local-governor", "date": "2002-06-13", "type": "governor",
     "name": "제3회 지방선거 — 시·도지사", "necElectionId": "0020020613", "necCode": "3", "displayOrder": -50 },
+  { "id": "2002-local-mayor", "date": "2002-06-13", "type": "mayor",
+    "name": "제3회 지방선거 — 시장·군수·구청장", "necElectionId": "0020020613", "necCode": "4", "displayOrder": -51 },
   { "id": "2002-local-council-prop", "date": "2002-06-13", "type": "local_council_prop",
     "name": "제3회 지방선거 — 시·도의원 비례", "necElectionId": "0020020613", "necCode": "8", "displayOrder": -49 },
   { "id": "2002-presidential", "date": "2002-12-19", "type": "presidential",
