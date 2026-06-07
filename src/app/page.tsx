@@ -8,11 +8,10 @@ import {
 } from "../lib/static-data";
 import { buildFilterOptions } from "../lib/static-series";
 
-// region/parties/from/to 등 URL searchParams 에 따라 서버에서 sources(다른 region.json)
-// 를 다시 골라야 하므로 dynamic 으로 강제. force-static 일 때는 picker 변경 시 RSC 가
-// 재실행되지 않고 prerender 결과만 반환 — state.region 이 항상 default("all")로 들어와
-// useEffect 가 optimisticState 를 reset, picker 가 갱신 안 되는 버그.
-export const dynamic = "force-dynamic";
+// 홈은 빌드 타임 SSG. URL searchParams 기반 region 분기는 client-side fetch 로 처리해야 함
+// (force-dynamic 으로 바꾸면 outputFileTracingExcludes(public/data/static/**) 때문에
+// lambda 에서 정적 JSON 을 못 읽어 500). picker 동작 fix 는 client fetch 패턴으로 별도 진행.
+export const dynamic = "force-static";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
