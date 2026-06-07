@@ -41,7 +41,12 @@ async function loadRegionCodeMap(): Promise<Map<string, string>> {
       (x: { code: string; name: string }) => x.code === sidoCode,
     )?.name;
     if (!sidoName) continue;
-    for (const sg of list) m.set(`${sidoName}|${sg.name}`, sg.code);
+    for (const sg of list) {
+      m.set(`${sidoName}|${sg.name}`, sg.code);
+      // 창원 일반구 호환: parsed 가 "창원시성산구" 형식 → seed 의 "성산구" 코드로
+      const expanded = Object.entries(SIGUNGU_PREFIX_STRIP).find(([, v]) => v === sg.name)?.[0];
+      if (expanded) m.set(`${sidoName}|${expanded}`, sg.code);
+    }
   }
   // emd
   for (const [sigCode, list] of Object.entries<{ code: string; name: string }[]>(
@@ -62,7 +67,12 @@ async function loadRegionCodeMap(): Promise<Map<string, string>> {
         )?.name
       : null;
     if (!sidoName || !sigName) continue;
-    for (const e of list) m.set(`${sidoName}|${sigName}|${e.name}`, e.code);
+    for (const e of list) {
+      m.set(`${sidoName}|${sigName}|${e.name}`, e.code);
+      // 창원 일반구 호환: emd lookup 도 "창원시성산구|토월동" 변종 추가
+      const expanded = Object.entries(SIGUNGU_PREFIX_STRIP).find(([, v]) => v === sigName)?.[0];
+      if (expanded) m.set(`${sidoName}|${expanded}|${e.name}`, e.code);
+    }
   }
   return m;
 }
