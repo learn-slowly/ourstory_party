@@ -105,6 +105,15 @@ export function AdvancedTable({
                   <th
                     key={h.id}
                     onClick={h.column.getToggleSortingHandler()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        h.column.getToggleSortingHandler()?.(e);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
                     style={partyHeaderStyle(colDef?.color)}
                     className={
                       "border border-zinc-200 dark:border-zinc-700 px-2 py-1 whitespace-nowrap cursor-pointer select-none " +
