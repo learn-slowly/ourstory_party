@@ -37,4 +37,23 @@ describe("buildCsvString", () => {
     const secondRow = s.split("\n")[2]; // BOM 줄, 헤더, 첫 데이터 ... 두 번째 데이터
     expect(secondRow).toBe('"A ""특수"" 케이스","","10.0"');
   });
+
+  it("셀에 콤마가 있어도 CSV 열 경계가 깨지지 않음 — 따옴표 안에 안전 포함", () => {
+    const m: TableModel = {
+      ...model,
+      rows: [{ id: "z", label: "A, B 와 C", cells: { justice: 1, 민주: 2 } }],
+    };
+    const s = buildCsvString(m);
+    // 데이터 행 한 줄. 따옴표 안에 콤마.
+    expect(s).toContain('"A, B 와 C","1.0","2.0"');
+  });
+
+  it("셀에 개행이 있어도 따옴표로 안전하게 둘러쌈", () => {
+    const m: TableModel = {
+      ...model,
+      rows: [{ id: "w", label: "두\n줄 라벨", cells: { justice: 3, 민주: 4 } }],
+    };
+    const s = buildCsvString(m);
+    expect(s).toContain('"두\n줄 라벨","3.0","4.0"');
+  });
 });
