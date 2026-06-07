@@ -138,6 +138,7 @@ export default async function Home({ searchParams }: PageProps) {
         sources={sources}
         elections={index.elections}
         parties={index.parties}
+        regionIndex={index.regions}
       />
     </main>
   );

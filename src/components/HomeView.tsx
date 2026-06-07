@@ -25,9 +25,10 @@ interface Props {
   sources: ChartSource[];
   elections: ElectionMeta[];
   parties: PartyMeta[];
+  regionIndex?: import("../types/static").StaticIndex["regions"];
 }
 
-export function HomeView({ state, filterOptions, emdOptions, stationOptions, sources, elections, parties }: Props) {
+export function HomeView({ state, filterOptions, emdOptions: emdOptionsFromServer, stationOptions: stationOptionsFromServer, sources, elections, parties, regionIndex }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -44,6 +45,40 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
     startTransition(() => router.push(qs ? `/?${qs}` : "/"));
   }
 
+  const emdOptions = useMemo(() => {
+    if (!regionIndex?.emdByRegion) return emdOptionsFromServer;
+    const code = optimisticState.region;
+    let sigunguCode: string | null = null;
+    if (code.startsWith("station:")) sigunguCode = code.split(":")[1] ?? null;
+    else if (/^\d{10}$/.test(code) && code.endsWith("00000") && !code.endsWith("00000000")) {
+      sigunguCode = code;
+    } else if (/^\d{10}$/.test(code) && code.endsWith("00") && !code.endsWith("00000")) {
+      sigunguCode = code.slice(0, 5) + "00000";
+    } else if (code.startsWith("9")) {
+      sigunguCode = code.slice(1, 6) + "00000";
+    }
+    if (!sigunguCode) return [];
+    const list = regionIndex.emdByRegion[sigunguCode] ?? [];
+    return list.map((r) => ({ code: r.code, name: r.name }));
+  }, [regionIndex, optimisticState.region, emdOptionsFromServer]);
+
+  const stationOptions = useMemo(() => {
+    if (!regionIndex?.stationListByEmd) return stationOptionsFromServer;
+    const code = optimisticState.region;
+    let emdCode: string | null = null;
+    if (code.startsWith("station:")) emdCode = code.split(":")[2] ?? null;
+    else if (/^\d{10}$/.test(code) && code.endsWith("00") && !code.endsWith("00000")) emdCode = code;
+    else if (code.startsWith("9")) emdCode = code;
+    if (!emdCode) return [];
+    const names = regionIndex.stationListByEmd[emdCode] ?? [];
+    const sigunguCode = code.startsWith("station:")
+      ? code.split(":")[1]
+      : emdCode.startsWith("9")
+        ? emdCode.slice(1, 6) + "00000"
+        : emdCode.slice(0, 5) + "00000";
+    return names.map((n) => ({ sigunguCode, emdCode: emdCode!, name: n }));
+  }, [regionIndex, optimisticState.region, stationOptionsFromServer]);
+
   // page.tsx 가 force-static 이라 server 는 default(state.region="all") sources 만 prerender.
   // region 변경 시 client 에서 직접 /data/static/region/{code}.json 을 fetch 해 clientSources 로 교체.
   // (station: 형식은 별도 매핑이 필요해 이번 fix 범위 밖.)
@@ -56,11 +91,27 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
       setClientSources(sources);
       return;
     }
-    if (code.startsWith("station:")) {
-      return; // station 단위 미지원 (별도 후속)
-    }
     let cancelled = false;
-    fetch(`/data/static/region/${code}.json`)
+    let url: string;
+    if (code.startsWith("station:")) {
+      const [, sigunguCode, emdCode, ...rest] = code.split(":");
+      const stationName = rest.join(":");
+      const sigungus = regionIndex
+        ? Object.values(regionIndex.sigunguByRegion).flat()
+        : [];
+      const sigunguMeta = sigungus.find((s) => s.code === sigunguCode);
+      const emds = regionIndex?.emdByRegion?.[sigunguCode] ?? [];
+      const emdMeta = emds.find((e) => e.code === emdCode);
+      if (!sigunguMeta || !emdMeta || !stationName) {
+        setClientSources([]);
+        return;
+      }
+      const safeName = `${sigunguMeta.name}-${emdMeta.name}-${stationName}`.replace(/[\/\\]/g, "_");
+      url = `/data/static/station/${encodeURIComponent(safeName)}.json`;
+    } else {
+      url = `/data/static/region/${code}.json`;
+    }
+    fetch(url)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`region.json ${r.status}`))))
       .then((f: { timeseries: Record<string, TimeseriesPoint[]> }) => {
         if (!cancelled) setClientSources([{ timeseries: f.timeseries }]);
@@ -71,7 +122,7 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
     return () => {
       cancelled = true;
     };
-  }, [optimisticState.region, sources]);
+  }, [optimisticState.region, sources, regionIndex]);
 
   // client-side chart 재계산. 정당/types/기간/위성/진보합산 토글 시 즉시 반영.
   const { data, lines } = useMemo(
