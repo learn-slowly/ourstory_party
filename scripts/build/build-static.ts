@@ -64,6 +64,27 @@ async function loadRegionCodeMap(): Promise<Map<string, string>> {
   return m;
 }
 
+// emdCode 별로 station name 목록을 group.
+// emdToParent: emdCode → { sigunguName, emdName }
+// stationKeys: 디렉터리에서 읽은 모든 station file basename (확장자 제외)
+export function buildStationListByEmd(
+  emdToParent: Record<string, { sigunguName: string; emdName: string }>,
+  stationKeys: string[],
+): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const [emdCode, { sigunguName, emdName }] of Object.entries(emdToParent)) {
+    const prefix = `${sigunguName}-${emdName}-`;
+    const names = stationKeys
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length));
+    if (names.length > 0) {
+      names.sort((a, b) => a.localeCompare(b, "ko"));
+      result[emdCode] = names;
+    }
+  }
+  return result;
+}
+
 function filterRowsForRegion(
   r: { sidoName: string; sigunguName: string; emdName: string | null },
   region: { name: string; level: "sido" | "sigungu" | "emd"; parent?: { name: string } },
@@ -80,6 +101,9 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   await mkdir(path.join(OUT, "region"), { recursive: true });
   await mkdir(path.join(OUT, "station"), { recursive: true });
+
+  // regions.json 로드 (emdToParent 구성용)
+  const seedRegions = JSON.parse(await readFile("data/seed/regions.json", "utf-8"));
 
   // index.json
   const idx = buildIndex();
@@ -129,6 +153,41 @@ async function main() {
     await writeFile(path.join(OUT, "station", `${safeKey}.json`), JSON.stringify(f));
   }
   console.log(`✓ station/*.json — ${stations.size} files`);
+
+  // stationListByEmd: emdCode → station 이름 목록
+  // emdToParent 구성 — emdByRegion 각 sigungu 의 children + sigunguByRegion 에서 sigunguName 역참조
+  const emdToParent: Record<string, { sigunguName: string; emdName: string }> = {};
+  for (const [sigCode, emds] of Object.entries<{ code: string; name: string }[]>(
+    seedRegions.emdByRegion ?? {},
+  )) {
+    // sigunguCode → sigunguName 역참조
+    let sigName: string | undefined;
+    for (const [, sgs] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.sigunguByRegion,
+    )) {
+      const match = sgs.find((s) => s.code === sigCode);
+      if (match) {
+        sigName = match.name;
+        break;
+      }
+    }
+    if (!sigName) continue;
+    for (const e of emds) {
+      emdToParent[e.code] = { sigunguName: sigName, emdName: e.name };
+    }
+  }
+  // station 디렉터리 readdir → stationKeys (확장자 제외)
+  const stationDir = path.join(OUT, "station");
+  const stationFiles = await readdir(stationDir);
+  const stationKeys = stationFiles
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => f.slice(0, -5)); // ".json" 제거
+  const stationListByEmd = buildStationListByEmd(emdToParent, stationKeys);
+
+  // index.json 에 stationListByEmd 추가해 재기록
+  const idxWithStation = { ...idx, regions: { ...idx.regions, stationListByEmd } };
+  await writeFile(path.join(OUT, "index.json"), JSON.stringify(idxWithStation));
+  console.log(`✓ stationListByEmd — emd keys: ${Object.keys(stationListByEmd).length}`);
 }
 
 main().catch((e) => {
