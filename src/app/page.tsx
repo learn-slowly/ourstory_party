@@ -8,8 +8,11 @@ import {
 } from "../lib/static-data";
 import { buildFilterOptions } from "../lib/static-series";
 
-// 홈은 빌드 타임 SSG. URL searchParams 의존 분기는 클라이언트 라우터가 핸들 (Next.js 가 동적 segment 가 아닌 한 force-static 허용).
-export const dynamic = "force-static";
+// region/parties/from/to 등 URL searchParams 에 따라 서버에서 sources(다른 region.json)
+// 를 다시 골라야 하므로 dynamic 으로 강제. force-static 일 때는 picker 변경 시 RSC 가
+// 재실행되지 않고 prerender 결과만 반환 — state.region 이 항상 default("all")로 들어와
+// useEffect 가 optimisticState 를 reset, picker 가 갱신 안 되는 버그.
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
