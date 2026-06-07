@@ -259,6 +259,363 @@ function parse18GeneralSheet(
   return result;
 }
 
+// ── 16대 총선 파서 ─────────────────────────────────────────────────────
+// 단일 XLS: 19,543 행, 227개 선거구 각각 "#선거구명" 헤더 행으로 구분
+// 구조: row N = "#선거구명", row N+1 = [투표구명|선거인수|투표수|#후별득|...], row N+2..N+3 = 정당명/후보명, row N+4+ = 데이터
+// 합계 행 = col0 "합계", 부재자 = "부재자투표", 소계 = "소계"
+//
+// 선거구명 → (시도명, 시군구명) 매핑: 16대는 시도별로 선거구가 묶임.
+// 선거구명에서 시군구 유추: 창원시갑 → (경상남도, 창원시), 마산시합포구 → (경상남도, 마산시) 등
+//
+// CP949 인코딩: 파일명은 ok, 셀값도 SheetJS BIFF8 기본 인코딩으로 정상 처리됨
+
+// 선거구명 → (시도, 시군구) 매핑 테이블
+// 총 227개 선거구를 모두 커버하는 대신, 전국 주요 패턴을 통해 동적으로 추정
+function inferRegion16(constName: string): { sidoName: string; sigunguName: string } {
+  // 직접 매핑 (패턴 매칭으로 처리 안 되는 특수 선거구)
+  const DIRECT_MAP: Record<string, { sidoName: string; sigunguName: string }> = {
+    // 부산 - 구 이름이 광역시 이름 없이 쓰임
+    "서구": { sidoName: "부산광역시", sigunguName: "서구" },
+    "중동구": { sidoName: "부산광역시", sigunguName: "중구" },
+    "영도구": { sidoName: "부산광역시", sigunguName: "영도구" },
+    "동래구": { sidoName: "부산광역시", sigunguName: "동래구" },
+    "남구": { sidoName: "부산광역시", sigunguName: "남구" },
+    "북구강서구갑": { sidoName: "부산광역시", sigunguName: "북구" },
+    "북구강서구을": { sidoName: "부산광역시", sigunguName: "강서구" },
+    "해운대구기장군갑": { sidoName: "부산광역시", sigunguName: "해운대구" },
+    "해운대구기장군을": { sidoName: "부산광역시", sigunguName: "기장군" },
+    "사하구갑": { sidoName: "부산광역시", sigunguName: "사하구" },
+    "사하구을": { sidoName: "부산광역시", sigunguName: "사하구" },
+    "금정구": { sidoName: "부산광역시", sigunguName: "금정구" },
+    "연제구": { sidoName: "부산광역시", sigunguName: "연제구" },
+    "수영구": { sidoName: "부산광역시", sigunguName: "수영구" },
+    "사상구": { sidoName: "부산광역시", sigunguName: "사상구" },
+    // 대구 - 구 이름이 접두사 없이 쓰임
+    "중구": { sidoName: "대구광역시", sigunguName: "중구" },
+    "동구": { sidoName: "대구광역시", sigunguName: "동구" },
+    "서구": { sidoName: "대구광역시", sigunguName: "서구" },
+    "남구": { sidoName: "대구광역시", sigunguName: "남구" },
+    "수성구갑": { sidoName: "대구광역시", sigunguName: "수성구" },
+    "수성구을": { sidoName: "대구광역시", sigunguName: "수성구" },
+    "달서구갑": { sidoName: "대구광역시", sigunguName: "달서구" },
+    "달서구을": { sidoName: "대구광역시", sigunguName: "달서구" },
+    "달성군": { sidoName: "대구광역시", sigunguName: "달성군" },
+    // 인천 - 구 이름이 접두사 없이
+    "연수구": { sidoName: "인천광역시", sigunguName: "연수구" },
+    "남동구갑": { sidoName: "인천광역시", sigunguName: "남동구" },
+    "남동구을": { sidoName: "인천광역시", sigunguName: "남동구" },
+    "부평구갑": { sidoName: "인천광역시", sigunguName: "부평구" },
+    "부평구을": { sidoName: "인천광역시", sigunguName: "부평구" },
+    "계양구": { sidoName: "인천광역시", sigunguName: "계양구" },
+    "서구.강화군갑": { sidoName: "인천광역시", sigunguName: "서구" },
+    "서구.강화군을": { sidoName: "인천광역시", sigunguName: "강화군" },
+    // 광주 - (광주) 접미사
+    "동구(광주)": { sidoName: "광주광역시", sigunguName: "동구" },
+    "서구(광주)": { sidoName: "광주광역시", sigunguName: "서구" },
+    "남구(광주)": { sidoName: "광주광역시", sigunguName: "남구" },
+    "광산구": { sidoName: "광주광역시", sigunguName: "광산구" },
+    // 대전 - (대전) 접미사
+    "동구(대전)": { sidoName: "대전광역시", sigunguName: "동구" },
+    "유성구": { sidoName: "대전광역시", sigunguName: "유성구" },
+    "대덕구": { sidoName: "대전광역시", sigunguName: "대덕구" },
+    // 울산 - (울산) 접미사
+    "남구(울산)": { sidoName: "울산광역시", sigunguName: "남구" },
+    "동구(울산)": { sidoName: "울산광역시", sigunguName: "동구" },
+    "북구(울산)": { sidoName: "울산광역시", sigunguName: "북구" },
+    "울주군": { sidoName: "울산광역시", sigunguName: "울주군" },
+  };
+
+  if (DIRECT_MAP[constName]) return DIRECT_MAP[constName];
+
+  // 서울 선거구 (구 단위)
+  const seoulDistricts = [
+    "종로구", "중구", "용산구", "성동구", "광진구", "동대문구", "중랑구",
+    "성북구", "강북구", "도봉구", "노원구", "은평구", "서대문구", "마포구",
+    "양천구", "강서구", "구로구", "금천구", "영등포구", "동작구", "관악구",
+    "서초구", "강남구", "송파구", "강동구",
+  ];
+  for (const d of seoulDistricts) {
+    if (constName.startsWith(d) || constName.replace(/갑|을$/, "") === d) {
+      return { sidoName: "서울특별시", sigunguName: d };
+    }
+  }
+
+  // 부산 선거구
+  const busanDistricts = [
+    "서구", "중동구", "영도구", "부산진구", "동래구", "남구", "북구",
+    "해운대구", "사하구", "금정구", "강서구", "연제구", "수영구", "사상구", "기장군",
+  ];
+  for (const d of busanDistricts) {
+    const base = constName.replace(/갑|을$/, "");
+    if (base === d || constName.startsWith(d + "갑") || constName.startsWith(d + "을")) {
+      return { sidoName: "부산광역시", sigunguName: d };
+    }
+  }
+  // 부산 중구/서구 특수 처리
+  if (constName === "중동구") return { sidoName: "부산광역시", sigunguName: "중구" };
+
+  // 대구, 인천, 광주, 대전, 울산 광역시
+  const metroMap: Record<string, string> = {
+    "중구(서울)": "중구", // already covered above
+  };
+
+  // 광역시별 선거구 패턴 - 시 이름으로 시작하는 경우
+  const metroRegions = [
+    { prefix: "대구", sido: "대구광역시" },
+    { prefix: "인천", sido: "인천광역시" },
+    { prefix: "광주", sido: "광주광역시" },
+    { prefix: "대전", sido: "대전광역시" },
+    { prefix: "울산", sido: "울산광역시" },
+  ];
+  for (const { prefix, sido } of metroRegions) {
+    if (constName.startsWith(prefix)) {
+      // "대구북구" → "북구", "인천남구갑" → "남구"
+      const rest = constName.substring(prefix.length).replace(/갑|을$/, "");
+      return { sidoName: sido, sigunguName: rest || prefix };
+    }
+  }
+
+  // 경기도
+  const gyeonggiCities = [
+    "수원", "성남", "의정부", "안양", "부천", "광명", "평택", "동두천",
+    "안산", "고양", "과천", "구리", "남양주", "오산", "시흥", "군포",
+    "의왕", "하남", "용인", "파주", "이천", "안성", "김포", "화성",
+    "광주", "양주", "포천", "여주", "연천", "가평", "양평",
+  ];
+  for (const c of gyeonggiCities) {
+    if (constName.startsWith(c)) {
+      const fullName = constName.replace(/갑|을$/, "").replace(/시$/, "") + "시";
+      // 확인: constName이 도시로 시작하면 경기도
+      return { sidoName: "경기도", sigunguName: fullName };
+    }
+  }
+
+  // 강원도
+  const gangwonCities = [
+    "춘천", "원주", "강릉", "동해", "태백", "속초", "삼척", "홍천",
+    "횡성", "영월", "평창", "정선", "철원", "화천", "양구", "인제", "고성",
+    "양양",
+  ];
+  for (const c of gangwonCities) {
+    if (constName.startsWith(c)) {
+      return { sidoName: "강원도", sigunguName: constName.replace(/갑|을$/, "") };
+    }
+  }
+
+  // 충청도
+  const chungbukCities = ["청주", "충주", "제천", "청원", "보은", "옥천", "영동", "증평", "진천", "괴산", "음성", "단양"];
+  for (const c of chungbukCities) {
+    if (constName.startsWith(c)) return { sidoName: "충청북도", sigunguName: constName.replace(/갑|을$/, "") };
+  }
+  const chungnamCities = ["천안", "공주", "보령", "아산", "서산", "논산", "계룡", "당진", "금산", "부여", "서천", "청양", "홍성", "예산", "태안"];
+  for (const c of chungnamCities) {
+    if (constName.startsWith(c)) return { sidoName: "충청남도", sigunguName: constName.replace(/갑|을$/, "") };
+  }
+
+  // 전라도
+  const jeonbukCities = ["전주", "군산", "익산", "정읍", "남원", "김제", "완주", "진안", "무주", "장수", "임실", "순창", "고창", "부안"];
+  for (const c of jeonbukCities) {
+    if (constName.startsWith(c)) return { sidoName: "전라북도", sigunguName: constName.replace(/갑|을$/, "") };
+  }
+  const jeonnamCities = ["목포", "여수", "순천", "나주", "광양", "담양", "곡성", "구례", "고흥", "보성", "화순", "장흥", "강진", "해남", "영암", "무안", "함평", "영광", "장성", "완도", "진도", "신안"];
+  for (const c of jeonnamCities) {
+    if (constName.startsWith(c)) return { sidoName: "전라남도", sigunguName: constName.replace(/갑|을$/, "") };
+  }
+
+  // 경상도
+  const gyeongbukCities = ["포항", "경주", "김천", "안동", "구미", "영주", "영천", "상주", "문경", "경산", "군위", "의성", "청송", "영양", "영덕", "청도", "고령", "성주", "칠곡", "예천", "봉화", "울진", "울릉"];
+  for (const c of gyeongbukCities) {
+    if (constName.startsWith(c)) return { sidoName: "경상북도", sigunguName: constName.replace(/갑|을$/, "") };
+  }
+  const gyeongnamCities = ["창원", "마산", "진주", "진해", "통영", "사천", "김해", "밀양", "거제", "양산", "의령", "함안", "창녕", "고성", "남해", "하동", "산청", "함양", "거창", "합천"];
+  for (const c of gyeongnamCities) {
+    if (constName.startsWith(c)) {
+      const base = constName.replace(/갑|을|합포구|회원구$/, "").replace(/시고성군$/, "시");
+      // 통영시고성군 → 통영시 + 고성군 (두 시군구) — 여기서는 통영시로만 귀속
+      const sigunguName = base.endsWith("시") || base.endsWith("군") ? base : base + "시";
+      return { sidoName: "경상남도", sigunguName };
+    }
+  }
+
+  // 제주
+  if (constName.startsWith("북제주") || constName.startsWith("남제주") ||
+      constName.startsWith("제주") || constName.startsWith("서귀포")) {
+    const sigungu = constName.replace(/갑|을$/, "");
+    return { sidoName: "제주특별자치도", sigunguName: sigungu };
+  }
+
+  // 세종 (없음 — 2000년엔 세종시 없음)
+  return { sidoName: "", sigunguName: constName.replace(/갑|을$/, "") };
+}
+
+// 16대 총선 XLS 파서 (단일 XLS, 복수 선거구)
+// 각 선거구 섹션: row "#선거구명" → rows 1-3 헤더 → rows 4+ 데이터
+function parse16GeneralXls(xls: Buffer): ParsedStationRow[] {
+  const wb = XLSX.read(xls, { type: "buffer" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const json: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
+  const result: ParsedStationRow[] = [];
+
+  // 섹션별 상태
+  let constName = "";
+  let sidoName = "";
+  let sigunguName = "";
+  let partyCols: Array<{ idx: number; name: string }> = [];
+  let inSection = false;
+  let headerPhase = 0;  // 0=섹션헤더, 1=컬럼헤더, 2=정당명행(2개), 3=후보명행, 4+=데이터
+
+  for (let r = 0; r < json.length; r++) {
+    const row = json[r];
+    if (!row) continue;
+    const col0 = String(row[0] ?? "").trim();
+
+    // 새 선거구 섹션 시작
+    if (col0.startsWith("#") && col0.length > 1) {
+      constName = col0.substring(1);
+      const region = inferRegion16(constName);
+      sidoName = region.sidoName;
+      sigunguName = region.sigunguName;
+      partyCols = [];
+      inSection = true;
+      headerPhase = 1;
+      continue;
+    }
+
+    if (!inSection) continue;
+
+    // 헤더 행 파싱
+    if (headerPhase === 1) {
+      // row[1]: [투표구명 | 선거인수 | 투표수 | #후별득 | ...]
+      // "#후별득" 을 만나면 다음이 정당명
+      headerPhase = 2;
+      continue;
+    }
+    if (headerPhase === 2) {
+      // 정당명 행 1: col3+ 에 정당명들 (공백 포함)
+      // 일부 셀은 null (2줄로 나뉨)
+      // col3~ 에서 "계" 찾기
+      const row2 = row as (string | null)[];
+      let endCol = row2.length - 1;
+      for (let i = row2.length - 1; i >= 3; i--) {
+        const v = String(row2[i] ?? "").trim();
+        if (v === "계") { endCol = i; break; }
+      }
+      if (endCol === row2.length - 1) {
+        // "계" 없으면 무효/기권 앞 col 탐색
+        for (let i = row2.length - 1; i >= 3; i--) {
+          const v = String(row2[i] ?? "").trim();
+          if (v && v !== "무효" && v !== "기권수" && !v.includes("투표수")) { endCol = i; break; }
+        }
+      }
+      // 정당명 누적
+      partyCols = [];
+      for (let i = 3; i < endCol; i++) {
+        const n = row2[i];
+        if (!n) continue;
+        const s = String(n).trim().replace(/\s+/g, " ");
+        if (!s || s === "계" || s.includes("무효") || s.includes("기권")) continue;
+        partyCols.push({ idx: i, name: s });
+      }
+      headerPhase = 3;
+      continue;
+    }
+    if (headerPhase === 3) {
+      // 정당명 행 2 (이어지는 당명 하단 부분) — 후보명 행일 수도 있음
+      // 16대 헤더: row2="새 천 년", row3="민 주 당" → 합쳐서 "새천년민주당"
+      const row3 = row as (string | null)[];
+      // 이 행이 정당명 연속행인지 후보명행인지 판별:
+      // 정당명 연속행 = col3+ 에 당명 조각이 있음 (후보명 = 성명)
+      // 판별: col3+ 에 값이 있고, 값이 한글로 짧은 단어면 정당명 연속
+      let isContinuationRow = false;
+      for (const pc of partyCols) {
+        const extra = String(row3[pc.idx] ?? "").trim();
+        if (extra && extra !== "계" && !extra.includes("무효") && !extra.includes("기권")) {
+          // 값이 있으면 연속 정당명으로 간주
+          isContinuationRow = true;
+          break;
+        }
+      }
+      if (isContinuationRow) {
+        for (let i = 0; i < partyCols.length; i++) {
+          const pc = partyCols[i];
+          const extra = String(row3[pc.idx] ?? "").trim();
+          if (extra && extra !== "계" && !extra.includes("무효") && !extra.includes("기권")) {
+            // 공백 구분자로 합침 → 나중에 정규화
+            pc.name = (pc.name.trim() + " " + extra).trim();
+          }
+        }
+        headerPhase = 4;  // 다음이 후보명 행
+      } else {
+        headerPhase = 4;  // 이미 후보명 행이었거나 데이터 바로 시작
+      }
+      // 정당명 정규화: "새 천 년 민 주 당" → "새천년민주당"
+      for (const pc of partyCols) {
+        pc.name = pc.name.replace(/\s+/g, "");
+      }
+      // 무소속 중복 → "무소속"으로 통일 (두 번째 무소속 후보도 같은 당이름)
+      // 두 번째 이후 "무소속" 계열 후보는 suffix 추가 가능하나 여기서는 모두 "무소속"으로
+      for (const pc of partyCols) {
+        if (pc.name.startsWith("무소속")) pc.name = "무소속";
+        if (pc.name === "소속" || pc.name === "무") pc.name = "무소속";
+      }
+      continue;
+    }
+    if (headerPhase === 4) {
+      // 후보명 행 (skip) — 혹은 바로 데이터
+      // col0이 숫자 없이 "부재자투표" or "합계" or 읍동명이면 데이터 시작
+      const isData = col0 === "합계" || col0 === "부재자투표" || col0 === "소계" ||
+        (col0 && !col0.includes("후보") && !col0.includes("득표") && !col0.includes("투표구"));
+      if (!isData) continue;
+      headerPhase = 5;
+      // fall through to data processing
+    }
+
+    // 데이터 행 처리
+    if (headerPhase >= 5 && partyCols.length > 0) {
+      if (!col0) continue;
+
+      const voters = toNum(row[1]);
+      const votes = toNum(row[2]);
+      const parties = partyCols.map(pc => ({ rawName: pc.name, votes: toNum(row[pc.idx]) }))
+        .filter(p => p.votes > 0);
+      if (parties.length === 0) continue;
+      const validVotes = parties.reduce((a, b) => a + b.votes, 0);
+
+      let kind: ParsedStationRow["kind"];
+      let emdName: string | null = null;
+
+      if (col0 === "합계") {
+        kind = "total";
+      } else if (col0 === "부재자투표" || col0 === "부재자") {
+        kind = "absentee";
+      } else if (col0 === "소계") {
+        kind = "subtotal";
+      } else {
+        // 투표구 행 — skip (너무 세분화, emd 없음)
+        continue;
+      }
+
+      if (kind !== "total" && kind !== "absentee") continue;  // 합계·부재자만 저장
+
+      result.push({
+        sidoName,
+        sigunguName,
+        emdName,
+        stationName: null,
+        kind,
+        totalVoters: voters,
+        totalVotes: votes,
+        validVotes,
+        invalidVotes: Math.max(0, votes - validVotes),
+        parties,
+      });
+    }
+  }
+
+  return result;
+}
+
 // ── 시도명 정규화 ─────────────────────────────────────────────────────
 function normalizeSidoName(rawFilename: string): string {
   const map: Record<string, string> = {
@@ -298,6 +655,34 @@ function normalizeSido18(rawFilename: string): string {
     if (rawFilename.includes(k)) return v;
   }
   return rawFilename;
+}
+
+// ── 16대 총선 파서 (공개 export) ──────────────────────────────────────
+export function parse2000General(zipPath: string): ParsedElection {
+  const outerZip = new AdmZip(zipPath);
+  const inner16 = outerZip.getEntries().find(e => {
+    const n = dec(Buffer.from(e.rawEntryName));
+    return n.includes("16대") && n.endsWith(".zip");
+  });
+  if (!inner16) throw new Error("16대 zip not found");
+
+  const zip16 = new AdmZip(inner16.getData());
+  const xlsEntry = zip16.getEntries().find(e => {
+    const n = dec(Buffer.from(e.rawEntryName));
+    return !e.isDirectory && (n.endsWith(".xls") || n.endsWith(".xlsx"));
+  });
+  if (!xlsEntry) throw new Error("16대 XLS not found");
+
+  const allRows = parse16GeneralXls(xlsEntry.getData());
+  const partySet = new Set<string>();
+  for (const r of allRows) r.parties.forEach(p => partySet.add(p.rawName));
+
+  return {
+    electionId: "2000-general",
+    electionDate: "2000-04-13",
+    rows: allRows,
+    partyNames: [...partySet],
+  };
 }
 
 // ── 17대 총선 파서 ─────────────────────────────────────────────────────
@@ -435,6 +820,11 @@ if (require.main === module) {
   const zipPath = "/Users/ahbaik/Downloads/국회의원선거 개표결과(제16대~19대).zip";
   const outDir = "data/parsed";
   mkdirSync(outDir, { recursive: true });
+
+  console.log("▶ 2000-general...");
+  const g2000 = parse2000General(zipPath);
+  console.log(`  rows=${g2000.rows.length}  parties=${g2000.partyNames.length}`);
+  writeFileSync(path.join(outDir, "2000-general.json"), JSON.stringify(g2000));
 
   console.log("▶ 2004-general...");
   const g2004 = parse2004General(zipPath);
