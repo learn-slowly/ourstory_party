@@ -42,11 +42,39 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
     startTransition(() => router.push(qs ? `/?${qs}` : "/"));
   }
 
+  // page.tsx 가 force-static 이라 server 는 default(state.region="all") sources 만 prerender.
+  // region 변경 시 client 에서 직접 /data/static/region/{code}.json 을 fetch 해 clientSources 로 교체.
+  // (station: 형식은 별도 매핑이 필요해 이번 fix 범위 밖.)
+  const [clientSources, setClientSources] = useState<ChartSource[]>(sources);
+  useEffect(() => setClientSources(sources), [sources]);
+
+  useEffect(() => {
+    const code = optimisticState.region;
+    if (!code || code === "all") {
+      setClientSources(sources);
+      return;
+    }
+    if (code.startsWith("station:")) {
+      return; // station 단위 미지원 (별도 후속)
+    }
+    let cancelled = false;
+    fetch(`/data/static/region/${code}.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`region.json ${r.status}`))))
+      .then((f: { timeseries: Record<string, TimeseriesPoint[]> }) => {
+        if (!cancelled) setClientSources([{ timeseries: f.timeseries }]);
+      })
+      .catch(() => {
+        if (!cancelled) setClientSources([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [optimisticState.region, sources]);
+
   // client-side chart 재계산. 정당/types/기간/위성/진보합산 토글 시 즉시 반영.
-  // region 만 바꾸면 sources 가 prop 으로 새로 들어올 때까지 (server roundtrip) 기존 sources 로 그림 — UX 상 자연스러움.
   const { data, lines } = useMemo(
-    () => buildHomeChart({ state: optimisticState, elections, parties, sources }),
-    [optimisticState, elections, parties, sources],
+    () => buildHomeChart({ state: optimisticState, elections, parties, sources: clientSources }),
+    [optimisticState, elections, parties, clientSources],
   );
 
   const regionName = useMemo(() => {
