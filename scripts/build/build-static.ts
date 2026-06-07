@@ -181,14 +181,38 @@ async function mergeJiseon2022Emd(
       });
     }
 
-    // region file 의 timeseries 에 누적
-    for (const [regionCode, partyMap] of byRegion) {
-      const regionFile = regions.get(regionCode);
-      if (!regionFile) continue; // 아직 없는 emd 코드 (regions에 없음)
+    // emd → sigungu / sido roll-up. parsed 가 emd 단위만 제공해서 시·군·도 페이지가 비어 보이는 문제 해소.
+    const sigunguAgg = new Map<string, Map<string, { votes: number; totalVotes: number }>>();
+    const sidoAgg = new Map<string, Map<string, { votes: number; totalVotes: number }>>();
+    for (const [emdCode, partyMap] of byRegion) {
+      const emdRegion = regions.get(emdCode);
+      const sigunguCode = emdRegion?.parent?.code;
+      if (!sigunguCode) continue;
+      const sigunguRegion = regions.get(sigunguCode);
+      const sidoCode = sigunguRegion?.parent?.code;
+      for (const [partyId, { votes, totalVotes }] of partyMap) {
+        if (!sigunguAgg.has(sigunguCode)) sigunguAgg.set(sigunguCode, new Map());
+        const sm = sigunguAgg.get(sigunguCode)!;
+        const sEx = sm.get(partyId) ?? { votes: 0, totalVotes: 0 };
+        sm.set(partyId, { votes: sEx.votes + votes, totalVotes: sEx.totalVotes + totalVotes });
+        if (sidoCode) {
+          if (!sidoAgg.has(sidoCode)) sidoAgg.set(sidoCode, new Map());
+          const dm = sidoAgg.get(sidoCode)!;
+          const dEx = dm.get(partyId) ?? { votes: 0, totalVotes: 0 };
+          dm.set(partyId, { votes: dEx.votes + votes, totalVotes: dEx.totalVotes + totalVotes });
+        }
+      }
+    }
 
+    // region file 의 timeseries 에 누적 — emd + sigungu + sido 모두
+    const commit = (
+      regionCode: string,
+      partyMap: Map<string, { votes: number; totalVotes: number }>,
+    ) => {
+      const regionFile = regions.get(regionCode);
+      if (!regionFile) return;
       for (const [partyId, { votes, totalVotes }] of partyMap) {
         if (!regionFile.timeseries[partyId]) regionFile.timeseries[partyId] = [];
-        // 이미 같은 electionId entry 있으면 skip (중복 방지)
         const alreadyExists = regionFile.timeseries[partyId].some(
           (p) => p.electionId === electionId,
         );
@@ -197,11 +221,14 @@ async function mergeJiseon2022Emd(
             electionId,
             votes,
             totalVotes,
-            share: totalVotes > 0 ? +(votes / totalVotes * 100).toFixed(2) : 0,
+            share: totalVotes > 0 ? +((votes / totalVotes) * 100).toFixed(2) : 0,
           });
         }
       }
-    }
+    };
+    for (const [code, pm] of byRegion) commit(code, pm);
+    for (const [code, pm] of sigunguAgg) commit(code, pm);
+    for (const [code, pm] of sidoAgg) commit(code, pm);
   }
 
   const totalUnmapped = Object.values(unmappedCount).reduce((s, n) => s + n, 0);
@@ -295,6 +322,58 @@ async function main() {
       }
     }
     console.log(`[build-static] sigungu/sido 빈 행 보충: ${filledCount}`);
+
+    // 2002 대선 패턴: emdName 없는 total/absentee 행에서 sidoName 이 비어있는 경우.
+    // (a) election 내에서 동일 sigunguName 으로 sidoName 이 채워진 행이 있으면 그걸 우선 사용 — 동명 sigungu 안전
+    // (b) seed 의 sigunguName → sidoName 매핑 사용. 동명(중구·동구 등) 은 ambiguous 마킹 후 skip.
+    const sigunguNameToSido = new Map<string, string>();
+    const ambiguousSigungu = new Set<string>();
+    for (const [sidoCode, sgList] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.sigunguByRegion,
+    )) {
+      const sidoName = (seedRegions.sido as { code: string; name: string }[])
+        .find((s) => s.code === sidoCode)?.name;
+      if (!sidoName) continue;
+      for (const sg of sgList) {
+        if (sigunguNameToSido.has(sg.name)) {
+          ambiguousSigungu.add(sg.name);
+        } else {
+          sigunguNameToSido.set(sg.name, sidoName);
+        }
+      }
+    }
+    let filledSidoFromSigungu = 0;
+    let skippedAmbiguous = 0;
+    for (const [, p] of parsed) {
+      const electionSigungu = new Map<string, string>();
+      for (const row of p.rows) {
+        if (row.sidoName && row.sigunguName && !electionSigungu.has(row.sigunguName)) {
+          electionSigungu.set(row.sigunguName, row.sidoName);
+        }
+      }
+      for (const row of p.rows) {
+        if (!row.sidoName && row.sigunguName) {
+          const local = electionSigungu.get(row.sigunguName);
+          if (local) {
+            row.sidoName = local;
+            filledSidoFromSigungu++;
+            continue;
+          }
+          if (!ambiguousSigungu.has(row.sigunguName)) {
+            const sd = sigunguNameToSido.get(row.sigunguName);
+            if (sd) {
+              row.sidoName = sd;
+              filledSidoFromSigungu++;
+            }
+          } else {
+            skippedAmbiguous++;
+          }
+        }
+      }
+    }
+    console.log(
+      `[build-static] sigunguName→sidoName 보충: ${filledSidoFromSigungu} 행 (모호 ${skippedAmbiguous} 행 skip)`,
+    );
 
     // 선거구형 sigunguName (예: 창원시을, 마산갑) → emdName 기반 행정 sigungu 자동 치환
     // 2000·2004·2008 총선 raw 가 sigungu 자리에 국회의원 선거구명을 담은 경우 처리.
