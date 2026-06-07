@@ -242,6 +242,61 @@ async function main() {
   const codeMap = await loadRegionCodeMap();
   console.log(`  region code map: ${codeMap.size}`);
 
+  // ── Fix 1: station-level 행의 빈 sigunguName/sidoName 보충 ──────────────────
+  // emdName → { sigunguName, sidoName } 매핑을 seed에서 구축.
+  // 동명 emd(예: 상남동 = 성산구 + 마산합포구)는 첫 매칭 사용 (cross-region 오염 가능, 경고 출력).
+  {
+    const emdNameToParent = new Map<string, { sidoName: string; sigunguName: string }>();
+    const ambiguousEmd = new Set<string>();
+    for (const [sigCode, emds] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.emdByRegion ?? {},
+    )) {
+      // sigunguCode → sidoCode + sidoName + sigunguName 역참조
+      const sidoCode = Array.from(
+        Object.entries<{ code: string; name: string }[]>(seedRegions.sigunguByRegion),
+      ).find(([, sgs]) =>
+        sgs.some((s: { code: string; name: string }) => s.code === sigCode),
+      )?.[0];
+      const sidoName = seedRegions.sido.find(
+        (x: { code: string; name: string }) => x.code === sidoCode,
+      )?.name;
+      const sigunguName = sidoCode
+        ? seedRegions.sigunguByRegion[sidoCode]?.find(
+            (s: { code: string; name: string }) => s.code === sigCode,
+          )?.name
+        : undefined;
+      if (!sidoName || !sigunguName) continue;
+      for (const emd of emds) {
+        if (emdNameToParent.has(emd.name)) {
+          ambiguousEmd.add(emd.name);
+          continue; // 첫 매칭 우선
+        }
+        emdNameToParent.set(emd.name, { sidoName, sigunguName });
+      }
+    }
+    if (ambiguousEmd.size > 0) {
+      console.warn(
+        `[build-static] 동명 emd ${ambiguousEmd.size} 개 — 첫 매칭 sigungu 로 station 통합 (cross-region 오염 가능):`,
+        [...ambiguousEmd].slice(0, 5),
+      );
+    }
+    // parsed rows 인플레이스 보충: sigunguName/sidoName 이 비어 있는 행 채우기
+    let filledCount = 0;
+    for (const [, p] of parsed) {
+      for (const row of p.rows) {
+        if (row.emdName && (!row.sigunguName || !row.sidoName)) {
+          const parent = emdNameToParent.get(row.emdName);
+          if (parent) {
+            if (!row.sigunguName) row.sigunguName = parent.sigunguName;
+            if (!row.sidoName) row.sidoName = parent.sidoName;
+            filledCount++;
+          }
+        }
+      }
+    }
+    console.log(`[build-static] sigungu/sido 빈 행 보충: ${filledCount}`);
+  }
+
   // region 파일
   const regions = await buildRegionFiles({
     elections: idx.elections.map((e) => ({ id: e.id, date: e.date })),
@@ -251,6 +306,78 @@ async function main() {
 
   // 2022 지선 emd 단위 timeseries 합산 (Phase 7.1)
   await mergeJiseon2022Emd(regions, idx as StaticIndex);
+
+  // ── Fix 2: 파싱 데이터가 없는 seed region 에도 placeholder region.json 보장 ──
+  // 404 방지: picker 에서 선택할 수 있는 모든 seed emd/sigungu/sido 를 커버.
+  {
+    // sido placeholder
+    for (const sido of seedRegions.sido as { code: string; name: string }[]) {
+      if (!regions.has(sido.code)) {
+        regions.set(sido.code, {
+          code: sido.code,
+          name: sido.name,
+          level: "sido",
+          children: [],
+          timeseries: {},
+          elections: [],
+        });
+      }
+    }
+    // sigungu placeholder
+    for (const [sidoCode, sgList] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.sigunguByRegion,
+    )) {
+      const sidoMeta = (seedRegions.sido as { code: string; name: string }[]).find(
+        (s) => s.code === sidoCode,
+      );
+      if (!sidoMeta) continue;
+      for (const sg of sgList) {
+        if (!regions.has(sg.code)) {
+          regions.set(sg.code, {
+            code: sg.code,
+            name: sg.name,
+            level: "sigungu",
+            parent: { code: sidoMeta.code, name: sidoMeta.name },
+            children: [],
+            timeseries: {},
+            elections: [],
+          });
+        }
+      }
+    }
+    // emd placeholder
+    let emdPlaceholderCount = 0;
+    for (const [sigCode, emds] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.emdByRegion ?? {},
+    )) {
+      // sigunguCode → sigunguName + sidoCode 역참조
+      const sidoCode = Array.from(
+        Object.entries<{ code: string; name: string }[]>(seedRegions.sigunguByRegion),
+      ).find(([, sgs]) =>
+        sgs.some((s: { code: string; name: string }) => s.code === sigCode),
+      )?.[0];
+      const sigunguName = sidoCode
+        ? seedRegions.sigunguByRegion[sidoCode]?.find(
+            (s: { code: string; name: string }) => s.code === sigCode,
+          )?.name
+        : undefined;
+      for (const emd of emds) {
+        if (!regions.has(emd.code)) {
+          regions.set(emd.code, {
+            code: emd.code,
+            name: emd.name,
+            level: "emd",
+            parent: sigunguName ? { code: sigCode, name: sigunguName } : undefined,
+            children: [],
+            timeseries: {},
+            elections: [],
+          });
+          emdPlaceholderCount++;
+        }
+      }
+    }
+    console.log(`[build-static] seed placeholder 추가 — emd: ${emdPlaceholderCount}`);
+  }
 
   for (const [code, f] of regions) {
     await writeFile(path.join(OUT, "region", `${code}.json`), JSON.stringify(f));
