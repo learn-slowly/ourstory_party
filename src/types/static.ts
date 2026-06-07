@@ -9,6 +9,7 @@ export interface StaticIndex {
     sido: RegionMeta[];
     sigunguByRegion: Record<string, RegionMeta[]>;
     emdByRegion?: Record<string, RegionMeta[]>;
+    stationListByEmd?: Record<string, string[]>;
   };
 }
 
