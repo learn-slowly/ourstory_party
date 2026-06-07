@@ -33,8 +33,10 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
 
   // Optimistic state — 토글 즉시 local 반영. URL 갱신 (server roundtrip) 은 background.
   // server 가 새 state 로 region.json 을 다시 보내면 useEffect 로 sync.
+  // force-static 일 때 server 가 보내는 state 는 항상 default("all"). useEffect 로
+  // server state 를 reset 하면 picker UI 가 매번 "전국" 으로 되돌아가는 버그.
+  // client 의 router.push 만으로 URL 동기 충분 → 외부 state prop 변화에 따른 sync 제거.
   const [optimisticState, setOptimisticState] = useState<HomeState>(state);
-  useEffect(() => setOptimisticState(state), [state]);
 
   function handleChange(next: HomeState) {
     setOptimisticState(next);
