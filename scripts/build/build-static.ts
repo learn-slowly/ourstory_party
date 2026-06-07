@@ -8,6 +8,9 @@ import { buildRegionFiles } from "./lib/build-region";
 import { buildElectionDetail } from "./lib/build-election-detail";
 import { buildStations } from "./lib/build-station";
 import { ParsedElection } from "./lib/types";
+import { buildRegionNameLookup, lookupRegion } from "./region-name-to-code";
+import type { StaticIndex } from "../../src/types/static";
+import type { JiseonNormalizedOutput } from "./parsers/jiseon-2022-types";
 
 const OUT = "public/data/static";
 
@@ -97,6 +100,115 @@ function filterRowsForRegion(
   return false;
 }
 
+// ── 2022 지선 emd 통합 ──────────────────────────────────────────────────────────
+
+// NEC xlsx 의 시군구명 정규화:
+// "창원시의창구" → "의창구" (창원시 5개 자치구는 prefix "창원시" 제거)
+// 기타는 원본 그대로.
+const SIGUNGU_PREFIX_STRIP: Record<string, string> = {
+  "창원시의창구": "의창구",
+  "창원시성산구": "성산구",
+  "창원시마산합포구": "마산합포구",
+  "창원시마산회원구": "마산회원구",
+  "창원시진해구": "진해구",
+};
+
+function normSigungu(raw: string): string {
+  return SIGUNGU_PREFIX_STRIP[raw] ?? raw;
+}
+
+async function mergeJiseon2022Emd(
+  regions: Map<string, import("../../src/types/static").RegionFile>,
+  indexForLookup: StaticIndex,
+): Promise<void> {
+  const PARSED_DIR = path.resolve("data/parsed/2022-local");
+  let jiseonFiles: string[] = [];
+  try {
+    jiseonFiles = (await readdir(PARSED_DIR)).filter((f) => f.endsWith(".json"));
+  } catch {
+    console.warn("[build-static] data/parsed/2022-local 없음 — Phase 7.1 파서 먼저 실행 필요");
+    return;
+  }
+
+  if (jiseonFiles.length === 0) {
+    console.warn("[build-static] data/parsed/2022-local/*.json 없음");
+    return;
+  }
+
+  const nameLookup = buildRegionNameLookup(indexForLookup);
+  const unmappedCount: Record<string, number> = {};
+
+  for (const f of jiseonFiles) {
+    const out: JiseonNormalizedOutput = JSON.parse(
+      await readFile(path.join(PARSED_DIR, f), "utf-8"),
+    );
+    const { electionId, rows } = out;
+
+    // emd region code 별로 정당 votes 집계
+    const byRegion = new Map<
+      string,
+      Map<string, { votes: number; totalVotes: number }>
+    >();
+
+    for (const row of rows) {
+      const code = lookupRegion(nameLookup, {
+        sido: row.sido,
+        sigungu: normSigungu(row.sigungu),
+        emd: row.emd,
+      });
+      if (!code) {
+        const key = `${row.sido}/${row.sigungu}/${row.emd}`;
+        unmappedCount[key] = (unmappedCount[key] ?? 0) + 1;
+        continue;
+      }
+
+      if (!byRegion.has(code)) byRegion.set(code, new Map());
+      const partyMap = byRegion.get(code)!;
+      const existing = partyMap.get(row.partyId) ?? { votes: 0, totalVotes: 0 };
+      partyMap.set(row.partyId, {
+        votes: existing.votes + row.votes,
+        totalVotes: row.totalVotes, // 행마다 같은 값 (소계 행의 합계)
+      });
+    }
+
+    // region file 의 timeseries 에 누적
+    for (const [regionCode, partyMap] of byRegion) {
+      const regionFile = regions.get(regionCode);
+      if (!regionFile) continue; // 아직 없는 emd 코드 (regions에 없음)
+
+      for (const [partyId, { votes, totalVotes }] of partyMap) {
+        if (!regionFile.timeseries[partyId]) regionFile.timeseries[partyId] = [];
+        // 이미 같은 electionId entry 있으면 skip (중복 방지)
+        const alreadyExists = regionFile.timeseries[partyId].some(
+          (p) => p.electionId === electionId,
+        );
+        if (!alreadyExists) {
+          regionFile.timeseries[partyId].push({
+            electionId,
+            votes,
+            totalVotes,
+            share: totalVotes > 0 ? +(votes / totalVotes * 100).toFixed(2) : 0,
+          });
+        }
+      }
+    }
+  }
+
+  const totalUnmapped = Object.values(unmappedCount).reduce((s, n) => s + n, 0);
+  if (totalUnmapped > 0) {
+    const top5 = Object.entries(unmappedCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    console.warn(
+      `[build-static] 2022 지선 emd region 매핑 실패 ${totalUnmapped} 행. Top:`,
+      top5,
+    );
+  } else {
+    console.log(`[build-static] 2022 지선 emd 매핑 실패 0 행 ✓`);
+  }
+  console.log(`✓ 2022 지선 emd timeseries 합산 — ${jiseonFiles.length}개 선거`);
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
   await mkdir(path.join(OUT, "region"), { recursive: true });
@@ -126,6 +238,10 @@ async function main() {
     parsedByElection: parsed,
     regionCodeMap: codeMap,
   });
+
+  // 2022 지선 emd 단위 timeseries 합산 (Phase 7.1)
+  await mergeJiseon2022Emd(regions, idx as StaticIndex);
+
   for (const [code, f] of regions) {
     await writeFile(path.join(OUT, "region", `${code}.json`), JSON.stringify(f));
   }
