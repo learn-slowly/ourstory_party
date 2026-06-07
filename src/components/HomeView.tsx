@@ -49,6 +49,16 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
     [optimisticState, elections, parties, sources],
   );
 
+  const regionName = useMemo(() => {
+    const code = optimisticState.region;
+    if (!code || code === "all") return "전국";
+    return (
+      emdOptions.find((e) => e.code === code)?.name ??
+      filterOptions.regions.find((r) => r.code === code)?.name ??
+      "전국"
+    );
+  }, [optimisticState.region, filterOptions.regions, emdOptions]);
+
   return (
     <div className="space-y-4">
       <HeaderControls
@@ -62,7 +72,7 @@ export function HomeView({ state, filterOptions, emdOptions, stationOptions, sou
         parties={filterOptions.parties}
         yearOptions={filterOptions.yearOptions}
       />
-      <TimeseriesPanel data={data} lines={lines} />
+      <TimeseriesPanel data={data} lines={lines} regionName={regionName} />
       <StatsCards data={data} lines={lines} />
     </div>
   );

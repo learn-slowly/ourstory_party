@@ -94,7 +94,7 @@ export function RegionTimeseries({
       <TimeseriesPanel
         data={data}
         lines={lines}
-        csvFilename={`timeseries-${regionName}.csv`}
+        regionName={regionName}
       />
     </section>
   );

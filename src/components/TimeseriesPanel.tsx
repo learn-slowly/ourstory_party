@@ -1,20 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { SortingState } from "@tanstack/react-table";
 import { HomeChart } from "./HomeChart";
-import { HomeTable, downloadCsv } from "./HomeTable";
+import { AdvancedTable } from "./table/AdvancedTable";
+import { TableToolbar } from "./table/TableToolbar";
+import { buildTableModel } from "@/lib/table/buildTableModel";
 import type { ChartRow, ChartLine } from "../lib/series";
 
 interface Props {
   data: ChartRow[];
   lines: ChartLine[];
-  csvFilename?: string;
+  regionName?: string; // 시트명·파일명에 사용
 }
 
-// 차트/표 토글 + CSV 버튼 + chart 또는 table 렌더.
-// viewMode 는 컴포넌트 내부 상태 (URL 비동기화). 홈·region 페이지 둘 다 이 컴포넌트 사용.
-export function TimeseriesPanel({ data, lines, csvFilename = "timeseries.csv" }: Props) {
+// 차트/표 토글 + AdvancedTable + 다운로드 버튼. 홈·region 페이지 둘 다 사용.
+export function TimeseriesPanel({ data, lines, regionName = "전국" }: Props) {
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
+  const [sort, setSort] = useState<SortingState>([]);
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+
+  const model = useMemo(
+    () => buildTableModel("timeseries", { rows: data, lines, regionName }),
+    [data, lines, regionName]
+  );
+
+  const safeName = regionName.replace(/[/\\?%*:|"<>]/g, "_");
+  const csvFilename = `시계열_${safeName}.csv`;
+  const xlsxFilename = `시계열_${safeName}.xlsx`;
 
   return (
     <>
@@ -45,20 +59,30 @@ export function TimeseriesPanel({ data, lines, csvFilename = "timeseries.csv" }:
             표
           </button>
         </div>
-        {viewMode === "table" && data.length > 0 && (
-          <button
-            type="button"
-            onClick={() => downloadCsv(data, lines, csvFilename)}
-            className="ml-2 px-3 py-1 text-sm rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-          >
-            CSV 저장
-          </button>
-        )}
       </div>
+
       {viewMode === "chart" ? (
         <HomeChart data={data} lines={lines} />
       ) : (
-        <HomeTable data={data} lines={lines} />
+        <>
+          <TableToolbar
+            model={model}
+            search={search}
+            visibility={visibility}
+            onSearchChange={setSearch}
+            onVisibilityChange={setVisibility}
+            csvFilename={csvFilename}
+            xlsxFilename={xlsxFilename}
+          />
+          <AdvancedTable
+            model={model}
+            sort={sort}
+            visibility={visibility}
+            globalFilter={search}
+            onSortChange={setSort}
+            onVisibilityChange={setVisibility}
+          />
+        </>
       )}
     </>
   );
