@@ -1,4 +1,11 @@
 [
+  { "id": "1992-presidential", "date": "1992-12-18", "type": "presidential",
+    "name": "제14대 대통령선거", "necElectionId": "0019921218", "necCode": "1", "displayOrder": -58 },
+  { "id": "1997-presidential", "date": "1997-12-18", "type": "presidential",
+    "name": "제15대 대통령선거", "necElectionId": "0019971218", "necCode": "1", "displayOrder": -56 },
+  { "id": "2000-general", "date": "2000-04-13", "type": "general",
+    "name": "제16대 국회의원선거 — 지역구", "necElectionId": "0020000413", "necCode": "2", "displayOrder": -55 },
+
   { "id": "2002-local-governor", "date": "2002-06-13", "type": "governor",
     "name": "제3회 지방선거 — 시·도지사", "necElectionId": "0020020613", "necCode": "3", "displayOrder": -50 },
   { "id": "2002-local-council-prop", "date": "2002-06-13", "type": "local_council_prop",

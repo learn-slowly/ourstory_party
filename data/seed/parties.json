@@ -20,8 +20,105 @@
     "aliases": ["민주노동당"], "activeFrom": "2000-01-30", "activeUntil": "2011-12-05"
   },
   {
+    "id": "minjadang_1992", "name": "민주자유당", "family": "major", "color": "#E61E2B",
+    "aliases": ["민자당", "민주자유당"], "activeFrom": "1990-01-22", "activeUntil": "1995-12-06"
+  },
+  {
+    "id": "gukmin_hoeuui", "name": "새정치국민회의", "family": "major", "color": "#152484",
+    "aliases": ["국민회의", "새정치국민회의", "평화민주당", "민주당"], "activeFrom": "1995-09-05", "activeUntil": "2000-01-20"
+  },
+  {
+    "id": "gukmin_shinryu", "name": "국민신당", "family": "other", "color": "#00B14C",
+    "aliases": ["국민신당"], "activeFrom": "1997-09-02", "activeUntil": "1998-03-12"
+  },
+  {
+    "id": "gukmin_seungli21", "name": "국민승리21", "family": "historical_progressive", "color": "#D6001C",
+    "aliases": ["국민승리21"], "activeFrom": "1997-07-30", "activeUntil": "2000-01-30"
+  },
+  {
+    "id": "gukmin_party_1992", "name": "국민당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["국민당"], "activeFrom": "1992-02-15", "activeUntil": "1993-08-01"
+  },
+  {
+    "id": "hanaronation", "name": "하나로국민연합", "family": "other", "color": "#9CA3AF",
+    "aliases": ["하나로국민연합"], "activeFrom": "2002-09-01", "activeUntil": "2003-01-01"
+  },
+  {
+    "id": "saehankook", "name": "새한국당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["새한국당"], "activeFrom": "1992-01-01", "activeUntil": "1993-12-01"
+  },
+  {
+    "id": "minjuchoeuihap", "name": "민주화합당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["민주화합당"], "activeFrom": "2004-01-01", "activeUntil": "2004-12-01"
+  },
+  {
+    "id": "gukmin_gukmin_dong", "name": "민주국민당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["민주국민당"], "activeFrom": "2002-01-01", "activeUntil": "2005-01-01"
+  },
+  {
+    "id": "gukmin_tong21", "name": "국민통합21", "family": "other", "color": "#9CA3AF",
+    "aliases": ["국민통합21"], "activeFrom": "2002-01-01", "activeUntil": "2005-01-01"
+  },
+  {
+    "id": "gajahee", "name": "가자희망2080", "family": "other", "color": "#9CA3AF",
+    "aliases": ["가자희망2080"], "activeFrom": "2004-01-01", "activeUntil": "2004-12-01"
+  },
+  {
+    "id": "changjo_korea", "name": "창조한국당", "family": "other", "color": "#00B14C",
+    "aliases": ["창조한국당"], "activeFrom": "2007-11-06", "activeUntil": "2012-01-01"
+  },
+  {
+    "id": "chamjuyin", "name": "참주인연합", "family": "other", "color": "#9CA3AF",
+    "aliases": ["참주인연합"], "activeFrom": "2007-01-01", "activeUntil": "2007-12-31"
+  },
+  {
+    "id": "kyongjegong", "name": "경제공화당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["경제공화당"], "activeFrom": "2007-01-01", "activeUntil": "2007-12-31"
+  },
+  {
+    "id": "saesidae", "name": "새시대참사람연합", "family": "other", "color": "#9CA3AF",
+    "aliases": ["새시대참사람연합"], "activeFrom": "2007-01-01", "activeUntil": "2007-12-31"
+  },
+  {
+    "id": "hanguksahoe", "name": "한국사회당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["한국사회당", "사회당", "녹색사민당", "녹색평화당"], "activeFrom": "2000-01-01", "activeUntil": "2012-01-01"
+  },
+  {
+    "id": "mirae_yonhap", "name": "미래연합", "family": "other", "color": "#9CA3AF",
+    "aliases": ["미래연합", "한국미래연합"], "activeFrom": "2010-01-01", "activeUntil": "2012-01-01"
+  },
+  {
+    "id": "gukmin_chamyeo", "name": "국민참여당", "family": "other", "color": "#00B14C",
+    "aliases": ["국민참여당"], "activeFrom": "2010-01-17", "activeUntil": "2012-05-03"
+  },
+  {
+    "id": "chinbakyon", "name": "친박연합", "family": "major", "color": "#E61E2B",
+    "aliases": ["친박연합", "친박연대"], "activeFrom": "2008-01-01", "activeUntil": "2012-01-01"
+  },
+  {
+    "id": "nonyun", "name": "노년권익보호당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["노년권익보호당"], "activeFrom": "2004-01-01", "activeUntil": "2004-12-01"
+  },
+  {
+    "id": "urimirae", "name": "우리미래", "family": "other", "color": "#9CA3AF",
+    "aliases": ["우리미래"], "activeFrom": "2017-01-01", "activeUntil": "2020-01-01"
+  },
+  {
+    "id": "daehan_aeguk", "name": "대한애국당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["대한애국당"], "activeFrom": "2017-01-01", "activeUntil": "2022-01-01"
+  },
+  {
+    "id": "pyunghwa_gajung", "name": "평화통일가정당", "family": "other", "color": "#9CA3AF",
+    "aliases": ["평화통일가정당"], "activeFrom": "2005-01-01", "activeUntil": "2012-01-01"
+  },
+  {
+    "id": "gukje_noksaek", "name": "국제녹색당", "family": "green", "color": "#1B7339",
+    "aliases": ["국제녹색당"], "activeFrom": "2016-01-01", "activeUntil": "2020-01-01"
+  },
+  {
     "id": "unified_progressive", "name": "통합진보당", "family": "historical_progressive", "color": "#D6001C",
-    "aliases": ["통합진보당"], "activeFrom": "2011-12-06", "activeUntil": "2014-12-19"
+    "aliases": ["통합진보당", "통합진보당 박미영", "통합진보당 배진하", "통합진보당 조재옥", "통합진보당 허윤성"],
+    "activeFrom": "2011-12-06", "activeUntil": "2014-12-19"
   },
   {
     "id": "people_united", "name": "민중연합당", "family": "historical_progressive", "color": "#D6001C",
@@ -29,7 +126,12 @@
   },
   {
     "id": "democratic", "name": "더불어민주당", "family": "major", "color": "#152484",
-    "aliases": ["더불어민주당", "새정치민주연합", "민주당", "통합민주당", "열린우리당", "민주통합당", "새천년민주당", "대통합민주신당", "민주통합신당"],
+    "aliases": ["더불어민주당", "새정치민주연합", "민주당", "통합민주당", "열린우리당", "민주통합당", "새천년민주당", "대통합민주신당", "민주통합신당",
+      "새정치민주연합 남광인", "새정치민주연합 박용화", "새정치민주연합 박희율", "새정치민주연합 심병희", "새정치민주연합 하주아",
+      "새정치민주연합김갑수", "새정치민주연합박성호", "새정치당",
+      "새정치민주연합 강원호", "새정치민주연합 김점기", "새정치민주연합 이창호", "새정치민주연합 조기주",
+      "새정치민주연합 박춘수", "새정치민주연합 유정심", "새정치민주연합한금석", "새정치민주연합함재묵",
+      "통합"],
     "activeFrom": "2014-03-26"
   },
   {
@@ -46,7 +148,8 @@
     "id": "people_power", "name": "국민의힘", "family": "major", "color": "#E61E2B",
     "aliases": [
       "국민의힘", "미래통합당", "자유한국당", "새누리당", "한나라당",
-      "친박연대", "자유선진당", "바른정당", "신한국당", "민주자유당", "민주정의당"
+      "친박연대", "자유선진당", "바른정당", "신한국당", "민주자유당", "민주정의당",
+      "새누리당김대환", "새누리당배병인", "새누리당이만재"
     ],
     "activeFrom": "2020-09-02"
   },
@@ -82,7 +185,10 @@
   },
   {
     "id": "independent", "name": "무소속", "family": "other", "color": "#9CA3AF",
-    "aliases": ["무소속"]
+    "aliases": ["무소속",
+      "무소속 고재윤", "무소속 김시권", "무소속 김재오", "무소속 신인용", "무소속 임승호", "무소속 최민순", "무소속 한문덕",
+      "무소속박남진", "무소속박종만", "무소속이정희", "무소속정동화", "무소속한종문",
+      "무소속 권용일"]
   },
   {
     "id": "democratic_new_future_2024", "name": "새로운미래", "family": "major", "color": "#00A5A4",
@@ -143,6 +249,13 @@
     "aliases": [
       "기타",
       "소나무당", "자유민주당", "기독당", "가가호호공명선거대한당",
+      "겨레자유평화통일당", "구국참사람연합", "구국총연합", "국민실향안보당", "국민중심당",
+      "새누리당강세용", "새누리당김동일", "새누리당문경훈", "새누리당정만식",
+      "시민당", "신정당", "직능연합당", "통일당",
+      "통합진보당 박정준",
+      "한미준", "희망사회당",
+      "민주공화당",
+      "바른정치聯",
       "국민대통합당", "여성의당", "히시태그국민정책당", "금융개혁당",
       "공화당", "노인복지당", "홍익당", "한국농어민당", "대한국민당",
       "미래당", "가가국민참여신당", "내일로미래로", "대한민국당",
