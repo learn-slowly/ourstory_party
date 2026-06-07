@@ -14,7 +14,68 @@
 import AdmZip from "adm-zip";
 import * as XLSX from "xlsx";
 import iconv from "iconv-lite";
-import type { JiseonRow, JiseonOutput } from "./jiseon-2022-types";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import type { JiseonRow, JiseonOutput, JiseonNormalizedOutput } from "./jiseon-2022-types";
+
+// ── 정당 정규화 ─────────────────────────────────────────────────────────────────
+
+interface PartyMeta {
+  id: string;
+  name: string;
+  aliases?: string[];
+}
+
+function loadPartyAliases(): Map<string, string> {
+  const f = readFileSync(path.resolve("data/seed/parties.json"), "utf-8");
+  const parties: PartyMeta[] = JSON.parse(f);
+  const map = new Map<string, string>();
+  for (const p of parties) {
+    map.set(p.name.replace(/\s/g, ""), p.id);
+    for (const a of p.aliases ?? []) map.set(a.replace(/\s/g, ""), p.id);
+  }
+  return map;
+}
+
+export function normalizePartyName(rawName: string, aliasMap: Map<string, string>): string {
+  const key = rawName.replace(/\s/g, "");
+  return aliasMap.get(key) ?? "UNMAPPED";
+}
+
+// ── 산출물 빌더 ──────────────────────────────────────────────────────────────────
+
+export async function buildJiseon2022Output(zipPath: string, outDir: string): Promise<void> {
+  const aliasMap = loadPartyAliases();
+  const parsed = await parseJiseon2022(zipPath);
+
+  mkdirSync(outDir, { recursive: true });
+  const otherCounts: Record<string, number> = {};
+
+  for (const out of parsed) {
+    const normalized: JiseonNormalizedOutput = {
+      ...out,
+      rows: out.rows.map((r) => {
+        const partyId = normalizePartyName(r.partyName, aliasMap);
+        if (partyId === "UNMAPPED") {
+          otherCounts[r.partyName] = (otherCounts[r.partyName] ?? 0) + 1;
+          return { ...r, partyId: "other" };
+        }
+        return { ...r, partyId };
+      }),
+    };
+    writeFileSync(
+      path.join(outDir, `${out.electionId}.json`),
+      JSON.stringify(normalized, null, 0),
+      "utf-8",
+    );
+  }
+
+  if (Object.keys(otherCounts).length > 0) {
+    console.warn("[parse-jiseon-2022] 미매핑 정당 카운트:", otherCounts);
+  } else {
+    console.log("[parse-jiseon-2022] 미매핑 정당 없음 ✓");
+  }
+}
 
 const DATE = "2022-06-01";
 
