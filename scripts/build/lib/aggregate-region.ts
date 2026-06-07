@@ -60,14 +60,19 @@ export function aggregateByRegion(
       if (r.emdName) addTo(emd, `${r.sidoName}|${r.sigunguName}|${r.emdName}`, r);
     }
   } else {
-    // 구 데이터: total → sigungu 집계, subtotal → emd 집계
+    // 구 데이터: total → sigungu/sido 집계, subtotal → emd 집계.
+    // 2018 지선처럼 total 행이 0이고 subtotal 만 있는 경우엔 subtotal 로 sigungu·sido roll-up.
+    const hasTotal = rows.some((r) => r.kind === "total");
     for (const r of rows) {
       if (r.kind === "total") {
         addTo(sido, r.sidoName, r);
         if (r.sigunguName) addTo(sigungu, `${r.sidoName}|${r.sigunguName}`, r);
       } else if (r.kind === "subtotal" && r.emdName) {
-        // emd 집계에만 추가 (sigungu는 total에서 이미 처리)
         addTo(emd, `${r.sidoName}|${r.sigunguName}|${r.emdName}`, r);
+        if (!hasTotal && r.sidoName) {
+          addTo(sido, r.sidoName, r);
+          if (r.sigunguName) addTo(sigungu, `${r.sidoName}|${r.sigunguName}`, r);
+        }
       }
     }
   }
