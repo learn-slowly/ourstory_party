@@ -295,6 +295,43 @@ async function main() {
       }
     }
     console.log(`[build-static] sigungu/sido 빈 행 보충: ${filledCount}`);
+
+    // 선거구형 sigunguName (예: 창원시을, 마산갑) → emdName 기반 행정 sigungu 자동 치환
+    // 2000·2004·2008 총선 raw 가 sigungu 자리에 국회의원 선거구명을 담은 경우 처리.
+    const validSigungu = new Set<string>();
+    for (const [sidoCode, list] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.sigunguByRegion,
+    )) {
+      const sName = (seedRegions.sido as { code: string; name: string }[])
+        .find((s) => s.code === sidoCode)?.name;
+      if (!sName) continue;
+      for (const sg of list) validSigungu.add(`${sName}|${sg.name}`);
+    }
+    let reroutedCount = 0;
+    const reroutedSamples = new Map<string, number>();
+    for (const [, p] of parsed) {
+      for (const row of p.rows) {
+        if (!row.sidoName || !row.sigunguName || !row.emdName) continue;
+        if (validSigungu.has(`${row.sidoName}|${row.sigunguName}`)) continue;
+        const parent = emdNameToParent.get(row.emdName);
+        if (parent && parent.sidoName === row.sidoName) {
+          const sampleKey = `${row.sidoName}|${row.sigunguName}→${parent.sigunguName}`;
+          reroutedSamples.set(sampleKey, (reroutedSamples.get(sampleKey) ?? 0) + 1);
+          row.sigunguName = parent.sigunguName;
+          reroutedCount++;
+        }
+      }
+    }
+    console.log(`[build-static] 선거구형 sigungu → 행정구역 자동 치환: ${reroutedCount} 행`);
+    if (reroutedSamples.size > 0) {
+      console.log(
+        `  샘플:`,
+        [...reroutedSamples.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([k, v]) => `${k}(${v})`),
+      );
+    }
   }
 
   // region 파일
