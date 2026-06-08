@@ -5,7 +5,11 @@
   },
   {
     "id": "labor", "name": "노동당", "family": "labor", "color": "#A50034",
-    "aliases": ["노동당", "진보신당", "진보신당연대회의"], "activeFrom": "2008-03-16"
+    "aliases": ["노동당"], "activeFrom": "2013-07-21"
+  },
+  {
+    "id": "new_progressive_2008", "name": "진보신당", "family": "labor", "color": "#EE352E",
+    "aliases": ["진보신당", "진보신당연대회의"], "activeFrom": "2008-03-16", "activeUntil": "2013-07-21"
   },
   {
     "id": "green", "name": "녹색당", "family": "green", "color": "#1B7339",
