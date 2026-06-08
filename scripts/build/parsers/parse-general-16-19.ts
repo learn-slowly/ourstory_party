@@ -122,7 +122,7 @@ function parse17GeneralSheet(
     // 소계 행 (읍면동 합계) — 소계 다음 투표구 행에서 emd 이름 추출
     if (col0 === "소계") {
       // Look ahead to find emd name from next station row (e.g., "반송동제1투" → "반송동")
-      let emdName = currentEmd;
+      let emdName: string | null = currentEmd;
       for (let k = r + 1; k < Math.min(json.length, r + 3); k++) {
         const nextRow = json[k];
         if (!nextRow) continue;
@@ -132,7 +132,7 @@ function parse17GeneralSheet(
         const emdMatch = nextCol0.match(/^(.+?)(?:제\d+투|제\d+|투표소)/);
         if (emdMatch) { emdName = emdMatch[1]; break; }
       }
-      if (!emdName) { currentEmd = undefined; continue; }
+      if (!emdName) { currentEmd = null; continue; }
 
       const parties = partyCols.map(pc => ({ rawName: pc.name, votes: toNum(row[pc.idx]) }))
         .filter(p => p.votes > 0);
@@ -290,11 +290,12 @@ function inferRegion16(constName: string): { sidoName: string; sigunguName: stri
     "연제구": { sidoName: "부산광역시", sigunguName: "연제구" },
     "수영구": { sidoName: "부산광역시", sigunguName: "수영구" },
     "사상구": { sidoName: "부산광역시", sigunguName: "사상구" },
-    // 대구 - 구 이름이 접두사 없이 쓰임
-    "중구": { sidoName: "대구광역시", sigunguName: "중구" },
-    "동구": { sidoName: "대구광역시", sigunguName: "동구" },
-    "서구": { sidoName: "대구광역시", sigunguName: "서구" },
-    "남구": { sidoName: "대구광역시", sigunguName: "남구" },
+    // 대구 - 구 이름이 접두사 없이 쓰임. "서구"·"남구" 는 부산과 키 충돌 → suffix 사용
+    // (광주/울산 패턴과 동일). raw 매칭 시 별도 로직 필요.
+    "중구(대구)": { sidoName: "대구광역시", sigunguName: "중구" },
+    "동구(대구)": { sidoName: "대구광역시", sigunguName: "동구" },
+    "서구(대구)": { sidoName: "대구광역시", sigunguName: "서구" },
+    "남구(대구)": { sidoName: "대구광역시", sigunguName: "남구" },
     "수성구갑": { sidoName: "대구광역시", sigunguName: "수성구" },
     "수성구을": { sidoName: "대구광역시", sigunguName: "수성구" },
     "달서구갑": { sidoName: "대구광역시", sigunguName: "달서구" },
