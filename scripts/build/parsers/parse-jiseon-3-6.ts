@@ -1074,6 +1074,37 @@ export async function parseJiseon36(outerZipPath: string): Promise<Jiseon36Resul
     return "";
   }
 
+  // 비표준 폴더명 (대구 "1.시장", 부산 "부산-시장-...", 충남 "1_시도지사선거" 등) → election id
+  // 키워드 우선순위: 교육감(skip) > 비례+(광역|기초) > 의장|구청장|시장군수|구청장 > 도지사|시도지사 > 시장(광역시) > 시도의원|도의원|시의원 > 구시군의원|기초의원|구의원
+  function getElectionId6HoeKeyword(folder: string): string {
+    const f = folder.replace(/[\s_]+/g, "");
+    // 교육감 / 교육의원
+    if (f.includes("교육감") || f.includes("교육의원")) return "__skip__";
+    // 비례
+    if (f.includes("비례")) {
+      if (f.includes("기초") || f.includes("구시군")) return "2014-local-council-basic-prop";
+      // "광역비례"·"시도비례"·"광역의원비례"·"시도의원비례" → council-prop
+      return "2014-local-council-prop";
+    }
+    // mayor (시·군·구장): "구시군의장"·"구시군장"·"시장군수"·"구청장"·"구군의장"
+    if (
+      f.includes("구시군의장") || f.includes("구시군장") || f.includes("시장군수") ||
+      f.includes("구청장") || f.includes("구군의장")
+    ) return "2014-local-mayor";
+    // governor: "시도지사"·"도지사"
+    if (f.includes("시도지사") || f.includes("도지사")) return "2014-local-governor";
+    // governor 단독 "시장" (광역시 시장) — mayor 의 시장군수와는 위에서 이미 걸러짐
+    if (f.includes("시장") && !f.includes("구")) return "2014-local-governor";
+    // 의원 — 광역(시·도의원) vs 기초(구시군의원·시·군의원·구의원·구·시·군의원)
+    if (f.includes("구시군의원") || f.includes("구의원") || f.includes("기초의원") || f.includes("시군의원") || f.includes("구군의원")) {
+      return "2014-local-council-basic";
+    }
+    if (f.includes("시도의원") || f.includes("도의원") || f.includes("시의원") || f.includes("광역의원")) {
+      return "2014-local-council";
+    }
+    return "";
+  }
+
   // 6회 시도지사 파일 탐색: 표준 "01_" 폴더가 없는 시도 대응
   // 파일명·폴더명에 시장/도지사/시도지사 키워드로 매핑
   function isGovernorFile6Hoe(entryPath: string): boolean {
@@ -1120,10 +1151,23 @@ export async function parseJiseon36(outerZipPath: string): Promise<Jiseon36Resul
       if (!iname.endsWith(".xls") && !iname.endsWith(".xlsx")) continue;
 
       // determine election from folder (standard path)
-      const folder = iname.split("/")[0];
+      let folder = iname.split("/")[0];
       let electionId = getElectionId6HoeFolder(folder);
 
-      // 비표준 경로의 시도지사 파일 대응
+      // 비표준 폴더명 — 키워드 기반 매핑
+      if (!electionId) electionId = getElectionId6HoeKeyword(folder);
+
+      // nested: 경북·전남 처럼 top folder 가 "읍면동별 개표자료" 단일 wrapper 인 경우 한 단계 더 들어감
+      if (!electionId) {
+        const parts = iname.split("/");
+        if (parts.length >= 3) {
+          folder = parts[1];
+          electionId = getElectionId6HoeFolder(folder);
+          if (!electionId) electionId = getElectionId6HoeKeyword(folder);
+        }
+      }
+
+      // 그래도 governor 미매칭 — 파일 경로에 키워드 들어있나 확인
       if (!electionId && isGovernorFile6Hoe(iname)) {
         electionId = "2014-local-governor";
       }
