@@ -561,9 +561,10 @@ function parse5HoeXls(xls: Buffer, sidoName: string): ParsedStationRow[] {
 // 비례: 구시군(0), 읍면동명(1), 구분(2), 선거인수(3), 투표수(4), parties(5...), 계(N), 무효(N+1), 기권(N+2)
 // 시도지사: per-sido xls, 구조: 구시군(0), 읍면동명(1), 구분(2), 선거인수(3), 투표수(4), parties(5...), 계, 무효, 기권
 
-function parse6HoeXls(xls: Buffer, sidoName: string, sigunguOverride?: string): ParsedStationRow[] {
+function parse6HoeXls(xls: Buffer, sidoName: string, sigunguOverride?: string, sheetName?: string): ParsedStationRow[] {
   const wb = XLSX.read(xls, { type: "buffer" });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const sheet = sheetName ? wb.Sheets[sheetName] : wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) return [];
   const json: (string | number | null)[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
   if (json.length < 3) return [];
 
@@ -1048,10 +1049,10 @@ export async function parseJiseon36(outerZipPath: string): Promise<Jiseon36Resul
   }
   console.log(`[5회 비례] 2010-local-council-prop: ${resultMap.get("2010-local-council-prop")?.rows.length ?? 0} rows`);
 
-  // ── 6회 (2014) — per-sido zip 처리 ──────────────────────────────────────────
+  // ── 6회 (2014) — per-sido zip 처리 (세종은 zip 대신 xlsx 단일) ───────────────
   const zipEntries6 = allEntries.filter(e => {
     const n = dec(Buffer.from(e.rawEntryName));
-    return n.includes("제6회") && n.endsWith(".zip") && !e.isDirectory;
+    return n.includes("제6회") && (n.endsWith(".zip") || n.endsWith(".xlsx")) && !e.isDirectory;
   });
 
   // sido name from zip filename
@@ -1140,6 +1141,18 @@ export async function parseJiseon36(outerZipPath: string): Promise<Jiseon36Resul
       continue;
     }
 
+    // 세종: zip 이 아니라 xlsx 단일 (sheet 별 race) — 외층에서 처리
+    if (zipName.endsWith(".xlsx")) {
+      const wb = XLSX.read(zipEntry.getData(), { type: "buffer" });
+      for (const sheetName of wb.SheetNames) {
+        const sheetRace = getElectionId6HoeKeyword(sheetName);
+        if (!sheetRace || sheetRace === "__skip__") continue;
+        const rows = parse6HoeXls(zipEntry.getData(), sidoName, undefined, sheetName);
+        addRows(sheetRace, rows);
+      }
+      continue;
+    }
+
     const innerZip = new AdmZip(zipEntry.getData());
 
     // 시도지사 파일을 별도로 먼저 수집 (중복 파싱 방지)
@@ -1148,7 +1161,49 @@ export async function parseJiseon36(outerZipPath: string): Promise<Jiseon36Resul
     for (const ie of innerZip.getEntries()) {
       if (ie.isDirectory) continue;
       const iname = dec(Buffer.from(ie.rawEntryName));
+
+      // 충북: nested zip — race 키워드로 inner zip 파일명 매핑 후 풀기
+      if (iname.endsWith(".zip")) {
+        const nestedZipName = iname.split("/").pop() ?? iname;
+        // 한 nested zip 안에 다른 race 섞일 수도 ("충북도지사, 충북교육감.zip") — 파일별 키워드 우선
+        const nestedDefaultRace = getElectionId6HoeKeyword(nestedZipName);
+        const nestedZip = new AdmZip(ie.getData());
+        for (const ne of nestedZip.getEntries()) {
+          if (ne.isDirectory) continue;
+          const nname = dec(Buffer.from(ne.rawEntryName));
+          if (!nname.endsWith(".xls") && !nname.endsWith(".xlsx")) continue;
+          const nfname = nname.split("/").pop() ?? nname;
+          const nfBase = nfname.replace(/\.(xls|xlsx)$/i, "");
+          // 시·군 prefix 추출 (예: "괴산군의원" → "괴산군") — 있으면 nested zip race 우선.
+          // 없으면 (예: "도지사.xls" / "교육감.xls") 파일명 race 우선 (mixed-race zip 대응).
+          const sgMatch = nfBase.match(/^([가-힣]+?[시군구])/);
+          let nRace: string | undefined | null;
+          if (sgMatch) {
+            nRace = nestedDefaultRace;
+          } else {
+            nRace = getElectionId6HoeKeyword(nfBase) || nestedDefaultRace;
+          }
+          if (!nRace || nRace === "__skip__") continue;
+          const sigunguOverride = sgMatch ? sgMatch[1] : undefined;
+          const rows = parse6HoeXls(ne.getData(), sidoName, sigunguOverride);
+          addRows(nRace, rows);
+        }
+        continue;
+      }
+
       if (!iname.endsWith(".xls") && !iname.endsWith(".xlsx")) continue;
+
+      // 세종: 단일 xlsx 의 sheet 별 race 처리 (sheet 명 = "세종시장선거"·"세종시의원선거"·"비례대표세종시의원선거"·"세종시교육감선거")
+      if (iname.endsWith(".xlsx") && sidoName === "세종특별자치시") {
+        const wb = XLSX.read(ie.getData(), { type: "buffer" });
+        for (const sheetName of wb.SheetNames) {
+          const sheetRace = getElectionId6HoeKeyword(sheetName);
+          if (!sheetRace || sheetRace === "__skip__") continue;
+          const rows = parse6HoeXls(ie.getData(), sidoName, undefined, sheetName);
+          addRows(sheetRace, rows);
+        }
+        continue;
+      }
 
       // determine election from folder (standard path)
       let folder = iname.split("/")[0];

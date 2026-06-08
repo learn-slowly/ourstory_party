@@ -269,6 +269,26 @@ async function main() {
   const codeMap = await loadRegionCodeMap();
   console.log(`  region code map: ${codeMap.size}`);
 
+  // ── Fix 0: 옛 시·도 이름 정규화 — 2023 특별자치도 승격 (강원·전북) 호환 ──────
+  // 2014/2018/2020/2022 등 옛 raw 는 "강원도"·"전라북도" 사용, seed 는 "강원특별자치도"·"전북특별자치도".
+  // parsed 의 sidoName 을 새 이름으로 통일 — sigunguByRegion lookup 매칭 위해 필수.
+  {
+    const SIDO_RENAME: Record<string, string> = {
+      "강원도": "강원특별자치도",
+      "전라북도": "전북특별자치도",
+    };
+    let renamedRows = 0;
+    for (const [, p] of parsed) {
+      for (const row of p.rows) {
+        if (row.sidoName && SIDO_RENAME[row.sidoName]) {
+          row.sidoName = SIDO_RENAME[row.sidoName];
+          renamedRows++;
+        }
+      }
+    }
+    if (renamedRows > 0) console.log(`[build-static] sidoName 정규화 (강원도→강원특별자치도 등): ${renamedRows} 행`);
+  }
+
   // ── Fix 1: station-level 행의 빈 sigunguName/sidoName 보충 ──────────────────
   // emdName → { sigunguName, sidoName } 매핑을 seed에서 구축.
   // 동명 emd(예: 상남동 = 성산구 + 마산합포구)는 첫 매칭 사용 (cross-region 오염 가능, 경고 출력).
