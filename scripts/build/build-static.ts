@@ -212,6 +212,8 @@ async function mergeJiseon2022Emd(
       const regionFile = regions.get(regionCode);
       if (!regionFile) return;
       for (const [partyId, { votes, totalVotes }] of partyMap) {
+        // 미출마(votes=0) 정당은 시계열에서 제외 — PRD: "미출마는 0이 아니라 '미출마'로 표시"
+        if (votes <= 0) continue;
         if (!regionFile.timeseries[partyId]) regionFile.timeseries[partyId] = [];
         const alreadyExists = regionFile.timeseries[partyId].some(
           (p) => p.electionId === electionId,

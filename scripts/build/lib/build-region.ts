@@ -73,6 +73,9 @@ function toSummary(electionId: string, a: RegionAggregate): RegionElectionSummar
     invalidVotes: a.invalidVotes,
     byParty: a.byParty
       .filter((p) => p.partyId)
+      // 미출마(votes=0) 정당은 시계열에서 제외 — PRD: "미출마는 0이 아니라 '미출마'로 표시".
+      // 예: 정의당 2018 도지사 경남 0% (미출마) 가 시계열 라인을 떨어뜨리던 문제 해소.
+      .filter((p) => p.votes > 0)
       .map((p) => ({
         partyId: p.partyId!,
         votes: p.votes,
