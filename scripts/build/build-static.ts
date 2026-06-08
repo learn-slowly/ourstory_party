@@ -378,6 +378,9 @@ async function main() {
     // 선거구형 sigunguName (예: 창원시을, 마산갑) → emdName 기반 행정 sigungu 자동 치환
     // 2000·2004·2008 총선 raw 가 sigungu 자리에 국회의원 선거구명을 담은 경우 처리.
     const validSigungu = new Set<string>();
+    // (sidoName, emdName) → 그 시·도 내 해당 emdName 을 가진 sigungu 후보 목록.
+    // 같은 시·도 안 동명 emd 가 있을 때 첫 매칭 대신 orig 선거구명 prefix 와 일치하는 sigungu 우선 사용.
+    const emdSigunguBySido = new Map<string, Set<string>>();
     for (const [sidoCode, list] of Object.entries<{ code: string; name: string }[]>(
       seedRegions.sigunguByRegion,
     )) {
@@ -386,21 +389,68 @@ async function main() {
       if (!sName) continue;
       for (const sg of list) validSigungu.add(`${sName}|${sg.name}`);
     }
+    for (const [sigCode, emds] of Object.entries<{ code: string; name: string }[]>(
+      seedRegions.emdByRegion ?? {},
+    )) {
+      const sidoCode = Array.from(
+        Object.entries<{ code: string; name: string }[]>(seedRegions.sigunguByRegion),
+      ).find(([, sgs]) =>
+        sgs.some((s: { code: string; name: string }) => s.code === sigCode),
+      )?.[0];
+      const sidoName = (seedRegions.sido as { code: string; name: string }[])
+        .find((s) => s.code === sidoCode)?.name;
+      const sigunguName = sidoCode
+        ? seedRegions.sigunguByRegion[sidoCode]?.find(
+            (s: { code: string; name: string }) => s.code === sigCode,
+          )?.name
+        : undefined;
+      if (!sidoName || !sigunguName) continue;
+      for (const emd of emds) {
+        const k = `${sidoName}|${emd.name}`;
+        if (!emdSigunguBySido.has(k)) emdSigunguBySido.set(k, new Set());
+        emdSigunguBySido.get(k)!.add(sigunguName);
+      }
+    }
     let reroutedCount = 0;
+    let reroutedByPrefix = 0;
     const reroutedSamples = new Map<string, number>();
     for (const [, p] of parsed) {
       for (const row of p.rows) {
         if (!row.sidoName || !row.sigunguName || !row.emdName) continue;
         if (validSigungu.has(`${row.sidoName}|${row.sigunguName}`)) continue;
-        const parent = emdNameToParent.get(row.emdName);
-        if (parent && parent.sidoName === row.sidoName) {
-          const sampleKey = `${row.sidoName}|${row.sigunguName}→${parent.sigunguName}`;
+        const candidates = emdSigunguBySido.get(`${row.sidoName}|${row.emdName}`);
+        let chosen: string | undefined;
+        if (candidates && candidates.size > 1) {
+          // 동명 충돌 — orig 선거구명에서 시·군명 prefix 추출해 후보와 매칭.
+          // 예: orig="김해시갑" startsWith "김해시" → 후보 중 "김해시" 우선.
+          for (const sg of candidates) {
+            if (row.sigunguName.startsWith(sg)) {
+              chosen = sg;
+              reroutedByPrefix++;
+              break;
+            }
+          }
+          // prefix 매칭 실패 시 첫 매칭(emdNameToParent) fallback
+          if (!chosen) {
+            const parent = emdNameToParent.get(row.emdName);
+            if (parent && parent.sidoName === row.sidoName) chosen = parent.sigunguName;
+          }
+        } else if (candidates && candidates.size === 1) {
+          chosen = candidates.values().next().value as string;
+        } else {
+          // 후보 없음 — 기존 emdNameToParent fallback (cross-sido 인 경우 sido mismatch 로 skip)
+          const parent = emdNameToParent.get(row.emdName);
+          if (parent && parent.sidoName === row.sidoName) chosen = parent.sigunguName;
+        }
+        if (chosen) {
+          const sampleKey = `${row.sidoName}|${row.sigunguName}→${chosen}`;
           reroutedSamples.set(sampleKey, (reroutedSamples.get(sampleKey) ?? 0) + 1);
-          row.sigunguName = parent.sigunguName;
+          row.sigunguName = chosen;
           reroutedCount++;
         }
       }
     }
+    console.log(`  - 동명 충돌 prefix 매칭으로 해소: ${reroutedByPrefix} 행`);
     console.log(`[build-static] 선거구형 sigungu → 행정구역 자동 치환: ${reroutedCount} 행`);
     if (reroutedSamples.size > 0) {
       console.log(
