@@ -95,6 +95,8 @@ export default async function RegionPage({ params, searchParams }: PageProps) {
       presub={presub}
       regionCode={code}
       regionName={regionFile.name}
+      regionFile={regionFile}
+      index={index}
       timeseries={regionFile.timeseries}
       initialState={initialState}
       filterOptions={filterOptions}
