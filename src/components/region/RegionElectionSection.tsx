@@ -44,14 +44,24 @@ export function RegionElectionSection({
   initialDist, initialTable, initialPresub, initialElectionId,
 }: Props) {
   const searchParams = useSearchParams();
-  const urlElectionId = searchParams.get("election");
   const validIds = useMemo(() => new Set(electionOptions.map((e) => e.id)), [electionOptions]);
-  const currentElectionId = urlElectionId && validIds.has(urlElectionId) ? urlElectionId : initialElectionId;
 
+  // hydration mismatch 방지 — 첫 render 는 server 와 동일한 initialElectionId 사용.
+  // mount 후 useEffect 로 URL 의 ?election= 값을 반영.
+  const [currentElectionId, setCurrentElectionId] = useState(initialElectionId);
   const [dist, setDist] = useState<RegionDistribution>(initialDist);
   const [table, setTable] = useState<ChildrenTable | null>(initialTable);
   const [presub, setPresub] = useState<PresubElDayResult | null>(initialPresub);
   const [loading, setLoading] = useState(false);
+
+  // URL ?election= watch — mount 시 + 사용자 picker 조작 시.
+  useEffect(() => {
+    const urlElectionId = searchParams.get("election");
+    if (urlElectionId && validIds.has(urlElectionId) && urlElectionId !== currentElectionId) {
+      setCurrentElectionId(urlElectionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     // 첫 렌더링(currentElectionId === initialElectionId) 은 server props 그대로 사용 — skip
