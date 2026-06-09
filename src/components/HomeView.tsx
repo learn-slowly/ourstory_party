@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HeaderControls } from "./HeaderControls";
 import { StatsCards } from "./StatsCards";
@@ -153,6 +154,19 @@ export function HomeView({ state, filterOptions, emdOptions: emdOptionsFromServe
         parties={filterOptions.parties}
         yearOptions={filterOptions.yearOptions}
       />
+      {/* region 페이지 (10자리 법정동 코드) 로 가는 진입 링크 — sido/sigungu/emd 만, station 제외 */}
+      {optimisticState.region !== "all" && /^\d{10}$/.test(optimisticState.region) && (
+        <div className="text-sm">
+          <Link
+            href={`/region/${optimisticState.region}`}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          >
+            <span>{regionName} 상세 분석</span>
+            <span className="text-zinc-500">— 후보자별 득표·관내사전 vs 선거일 비교</span>
+            <span aria-hidden>→</span>
+          </Link>
+        </div>
+      )}
       <TimeseriesPanel data={data} lines={lines} regionName={regionName} />
       <StatsCards data={data} lines={lines} />
     </div>
