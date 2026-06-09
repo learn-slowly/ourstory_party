@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HeaderControls } from "./HeaderControls";
 import { StatsCards } from "./StatsCards";
 import { TimeseriesPanel } from "./TimeseriesPanel";
 import { buildHomeChart } from "../lib/static-series";
-import { encodeState, type HomeState } from "../lib/url-state";
+import { encodeState, parseSearchParams, type HomeState } from "../lib/url-state";
 import type { ElectionMeta, PartyMeta, TimeseriesPoint } from "../types/static";
 
 interface RegionOpt { code: string; level: string; name: string; parentCode?: string | null; }
@@ -39,6 +39,18 @@ export function HomeView({ state, filterOptions, emdOptions: emdOptionsFromServe
   // server state 를 reset 하면 picker UI 가 매번 "전국" 으로 되돌아가는 버그.
   // client 의 router.push 만으로 URL 동기 충분 → 외부 state prop 변화에 따른 sync 제거.
   const [optimisticState, setOptimisticState] = useState<HomeState>(state);
+
+  // 공유 URL 직접 진입 (예: ?region=4812312700) 시 picker 상태 복원 — mount 1회만.
+  // page.tsx 가 force-static 이라 server props 는 항상 default. client mount 시 실제 URL 파싱해서 동기화.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const flat: Record<string, string | undefined> = {};
+    searchParams.forEach((v, k) => { flat[k] = v; });
+    const parsed = parseSearchParams(flat);
+    setOptimisticState(parsed);
+    // mount 1회만 — 이후 사용자 picker 조작은 router.push 로 URL 갱신, optimisticState 는 controlled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleChange(next: HomeState) {
     setOptimisticState(next);
