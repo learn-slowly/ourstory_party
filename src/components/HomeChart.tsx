@@ -35,7 +35,11 @@ export function HomeChart({ data, lines }: Props) {
         />
         <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
         <Tooltip
-          formatter={(value, name) => [`${value}%`, String(name)]}
+          formatter={(value, name) =>
+            typeof value === "number"
+              ? [`${value}%`, String(name)]
+              : ["미출마", String(name)]
+          }
           contentStyle={{ fontSize: 12 }}
         />
         {lines.map((l) => (
@@ -48,7 +52,7 @@ export function HomeChart({ data, lines }: Props) {
             strokeWidth={l.partyId === "justice" ? 3 : 2}
             dot={{ r: l.partyId === "justice" ? 4 : 3 }}
             isAnimationActive={false}
-            connectNulls
+            connectNulls={false}
           />
         ))}
       </LineChart>
